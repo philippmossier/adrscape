@@ -1,0 +1,54 @@
+[project]
+name = "adrscape"
+version = "0.1.0"
+description = "Map a company's engineering landscape from its repos: ADRs, docs, manifests into a knowledge graph, semantic search and MCP tools."
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "philippmossier", email = "mossier.dev@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp>=2.3.0",
+    "neo4j>=6.4.0",
+    "pgvector>=0.5.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "typer>=0.27.3",
+]
+
+[project.scripts]
+adrscape = "adrscape.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11.21,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+include = ["src", "tests"]
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.pyright/
+
+# Local config and data
+.env
+data/
+CLAUDE.local.md
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

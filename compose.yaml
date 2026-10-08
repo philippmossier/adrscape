@@ -1,0 +1,38 @@
+name: adrscape
+
+services:
+  postgres:
+    image: docker.io/pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: adrscape
+      POSTGRES_PASSWORD: adrscape
+      POSTGRES_DB: adrscape
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adrscape -d adrscape"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  neo4j:
+    image: docker.io/library/neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/adrscape-dev
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4jdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p adrscape-dev 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  pgdata:
+  neo4jdata:
