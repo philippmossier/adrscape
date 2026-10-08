@@ -13,8 +13,10 @@ processes like ADR review.
 
 ## Status
 
-**v0 in progress.** What runs today: project skeleton, both databases in
-compose, and a health check. Nothing is ingested yet.
+**v0 in progress.** What runs today: both databases in compose, a health check,
+and the first `Source`: `uv run adrscape docs <repo>...` lists the ADRs, READMEs,
+docs and manifests it would ingest from local git clones. Nothing is stored yet.
+Why: [ADR-001](docs/adr/001-source-protocol-and-document-identity.md).
 
 ## Architecture (target)
 

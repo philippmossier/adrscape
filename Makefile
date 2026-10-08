@@ -3,6 +3,7 @@
 setup:  ## install deps into .venv, create .env if missing
 	uv sync
 	test -f .env || cp .env.example .env
+	git config core.hooksPath .githooks
 
 up:     ## start Postgres+pgvector and Neo4j in the background
 	podman compose up -d

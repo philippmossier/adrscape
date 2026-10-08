@@ -1,0 +1,5 @@
+#!/bin/sh
+# main gets one squashed commit per build step, and it must pass `make check`.
+# Commits on step/* branches stay unchecked on purpose (wip is fine there).
+[ "$(git symbolic-ref --short HEAD 2>/dev/null)" = "main" ] || exit 0
+exec make check

@@ -7,7 +7,7 @@ layer come later (see README roadmap).
 
 ## Commands
 
-- `make setup`: install deps (`uv sync`), create `.env` from `.env.example`
+- `make setup`: install deps (`uv sync`), create `.env` from `.env.example`, enable the git hook in `.githooks/` (`make check` before every commit on `main`)
 - `make up` / `make down`: start / stop Postgres+pgvector and Neo4j (podman compose)
 - `make check`: ruff lint, ruff format check, pyright (strict), pytest. Must be green before any commit.
 - `make fmt`: autofix lint and format
@@ -17,7 +17,7 @@ layer come later (see README roadmap).
 
 - `src/adrscape/config.py`: typed settings from env / `.env` (pydantic-settings)
 - `src/adrscape/cli.py`: typer CLI, entry point `adrscape`
-- `src/adrscape/ingest/`: fetch, parse, chunk, embed
+- `src/adrscape/ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed
 - `src/adrscape/store/`: `postgres.py` (vectors), `graph.py` (Neo4j)
 - `src/adrscape/mcp_server.py`: MCP tools
 - `docs/adr/`: architecture decision records, written when the decision is made

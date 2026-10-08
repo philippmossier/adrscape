@@ -1,12 +1,14 @@
 """Command-line entry point (`adrscape ...`)."""
 
 from collections.abc import Callable
+from pathlib import Path
 
 import psycopg
 import typer
 from neo4j import GraphDatabase
 
 from adrscape.config import get_settings
+from adrscape.ingest.source import LocalGitSource, Source
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -56,3 +58,14 @@ def health() -> None:
             failed = True
             typer.echo(f"{name:<9} FAIL  {type(exc).__name__}: {exc}")
     raise typer.Exit(code=1 if failed else 0)
+
+
+@app.command()
+def docs(repos: list[Path]) -> None:
+    """List the documents adrscape would ingest from local git clones."""
+    source: Source = LocalGitSource(repos)
+    count = 0
+    for doc in source.documents():
+        count += 1
+        typer.echo(f"{doc.kind:<9} {doc.sha[:7]}  {doc.repo}/{doc.path}")
+    typer.echo(f"{count} documents")
