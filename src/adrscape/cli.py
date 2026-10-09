@@ -8,7 +8,9 @@ import typer
 from neo4j import GraphDatabase
 
 from adrscape.config import get_settings
+from adrscape.ingest.chunk import chunk_docs
 from adrscape.ingest.fetch import fetch as fetch_source
+from adrscape.ingest.parse import load_docs
 from adrscape.ingest.source import LocalGitSource, Source
 
 app = typer.Typer(no_args_is_help=True)
@@ -81,3 +83,18 @@ def fetch(repos: list[Path]) -> None:
         f"{report.written} written, {report.unchanged} unchanged, "
         f"{report.removed} removed -> {raw_dir}"
     )
+
+
+@app.command()
+def chunks(full: bool = False) -> None:
+    """Parse and chunk the raw dir; print one line per chunk (or full text)."""
+    count = 0
+    docs: set[tuple[str, str]] = set()
+    for c in chunk_docs(load_docs(get_settings().raw_dir)):
+        count += 1
+        docs.add((c.repo, c.path))
+        where = f"{c.repo}/{c.path}#{c.ord}"
+        typer.echo(f"{c.kind:<9} {len(c.text):>5}  {where}  {c.heading}")
+        if full:
+            typer.echo(f"{c.text}\n")
+    typer.echo(f"{count} chunks from {len(docs)} documents")

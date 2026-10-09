@@ -35,7 +35,7 @@ def fetch(source: Source, raw_dir: Path) -> FetchReport:
     written = unchanged = 0
 
     for ref in source.refs():
-        target = _target(root, ref)
+        target = raw_path(root, ref)
         known = prev.get((ref.repo, ref.path))
         if known is not None and known.sha == ref.sha and target.is_file():
             unchanged += 1
@@ -51,7 +51,7 @@ def fetch(source: Source, raw_dir: Path) -> FetchReport:
         if key in curr:
             continue
         if ref.repo in fetched_repos:
-            _target(root, ref).unlink(missing_ok=True)
+            raw_path(root, ref).unlink(missing_ok=True)
             removed += 1
         else:
             curr[key] = ref
@@ -74,7 +74,7 @@ def _write_index(root: Path, refs: list[DocRef]) -> None:
     os.replace(tmp, root / INDEX_FILE)
 
 
-def _target(root: Path, ref: DocRef) -> Path:
+def raw_path(root: Path, ref: DocRef) -> Path:
     """Where a ref lands on disk. Repo and path come from untrusted input."""
     repo_dir = (root / ref.repo).resolve()
     target = (repo_dir / ref.path).resolve()
