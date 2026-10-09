@@ -1,9 +1,9 @@
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from adrscape.ingest.source import DocKind, LocalGitSource, classify
+from tests.gitrepo import git
 
 
 @pytest.mark.parametrize(
@@ -37,43 +37,29 @@ def test_classify(path: str, kind: DocKind | None) -> None:
     assert classify(path) == kind
 
 
-def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, check=True, text=True
-    ).stdout.strip()
-
-
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
-    repo = tmp_path / "demo-repo"
-    (repo / "docs" / "adr").mkdir(parents=True)
-    (repo / "docs" / "adr" / "0001-use-sse.md").write_text("# Use SSE\n")
-    (repo / "README.md").write_text("# Demo\n")
-    (repo / "main.py").write_text("print('hi')\n")
-    _git(repo, "init", "-q")
-    _git(repo, "add", ".")
-    _git(
-        repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"
-    )
-    return repo
-
-
 def test_local_git_source_reads_committed_docs(repo: Path) -> None:
-    docs = {d.path: d for d in LocalGitSource([repo]).documents()}
+    source = LocalGitSource([repo])
+    refs = {r.path: r for r in source.refs()}
 
-    assert set(docs) == {"README.md", "docs/adr/0001-use-sse.md"}
-    adr = docs["docs/adr/0001-use-sse.md"]
+    assert set(refs) == {"README.md", "docs/adr/0001-use-sse.md"}
+    adr = refs["docs/adr/0001-use-sse.md"]
     assert adr.repo == "demo-repo"
     assert adr.kind is DocKind.ADR
-    assert adr.content == "# Use SSE\n"
-    assert adr.sha == _git(repo, "rev-parse", "HEAD:docs/adr/0001-use-sse.md")
+    assert adr.sha == git(repo, "rev-parse", "HEAD:docs/adr/0001-use-sse.md")
+    assert source.read(adr) == "# Use SSE\n"
 
 
 def test_local_git_source_ignores_uncommitted_files(repo: Path) -> None:
     (repo / "docs" / "notes.md").write_text("private\n")
     (repo / "README.md").write_text("edited, not committed\n")
 
-    docs = {d.path: d for d in LocalGitSource([repo]).documents()}
+    source = LocalGitSource([repo])
+    refs = {r.path: r for r in source.refs()}
 
-    assert "docs/notes.md" not in docs
-    assert docs["README.md"].content == "# Demo\n"
+    assert "docs/notes.md" not in refs
+    assert source.read(refs["README.md"]) == "# Demo\n"
+
+
+def test_local_git_source_rejects_duplicate_repo_names(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="two repos named"):
+        LocalGitSource([tmp_path / "a" / "x", tmp_path / "b" / "x"])

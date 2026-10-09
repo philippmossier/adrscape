@@ -1,6 +1,7 @@
 """Typed settings loaded from environment variables and `.env`."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: SecretStr = SecretStr("adrscape-dev")
+    raw_dir: Path = Path("data/raw")
 
 
 @lru_cache

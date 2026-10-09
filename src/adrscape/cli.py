@@ -8,6 +8,7 @@ import typer
 from neo4j import GraphDatabase
 
 from adrscape.config import get_settings
+from adrscape.ingest.fetch import fetch as fetch_source
 from adrscape.ingest.source import LocalGitSource, Source
 
 app = typer.Typer(no_args_is_help=True)
@@ -65,7 +66,18 @@ def docs(repos: list[Path]) -> None:
     """List the documents adrscape would ingest from local git clones."""
     source: Source = LocalGitSource(repos)
     count = 0
-    for doc in source.documents():
+    for ref in source.refs():
         count += 1
-        typer.echo(f"{doc.kind:<9} {doc.sha[:7]}  {doc.repo}/{doc.path}")
+        typer.echo(f"{ref.kind:<9} {ref.sha[:7]}  {ref.repo}/{ref.path}")
     typer.echo(f"{count} documents")
+
+
+@app.command()
+def fetch(repos: list[Path]) -> None:
+    """Copy documents from local git clones into the raw dir, skip unchanged."""
+    raw_dir = get_settings().raw_dir
+    report = fetch_source(LocalGitSource(repos), raw_dir)
+    typer.echo(
+        f"{report.written} written, {report.unchanged} unchanged, "
+        f"{report.removed} removed -> {raw_dir}"
+    )

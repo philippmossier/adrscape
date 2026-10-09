@@ -17,22 +17,30 @@ class DocKind(StrEnum):
 
 
 @dataclass(frozen=True)
-class RawDocument:
-    """One file as a Source delivers it, before parsing.
+class DocRef:
+    """One file as a Source lists it: identity and kind, no content.
 
     `sha` is the git blob sha, the same value the GitHub API returns, so a
-    document has one identity (repo, path, sha) whichever Source fetched it.
+    document has one identity (repo, path, sha) whichever Source listed it.
     """
 
     repo: str
     path: str
     sha: str
     kind: DocKind
-    content: str
 
 
 class Source(Protocol):
-    def documents(self) -> Iterator[RawDocument]: ...
+    """Lists documents cheaply, reads content only on request.
+
+    Listing and reading are separate so a caller can compare shas first and
+    read only what changed: one tree call plus one call per changed file
+    against a rate-limited API.
+    """
+
+    def refs(self) -> Iterator[DocRef]: ...
+
+    def read(self, ref: DocRef) -> str: ...
 
 
 MANIFESTS = frozenset(
@@ -98,29 +106,28 @@ class LocalGitSource:
     """
 
     def __init__(self, repos: Sequence[Path]) -> None:
-        self.repos = repos
+        self._repos: dict[str, Path] = {}
+        for repo in repos:
+            name = repo.resolve().name
+            if name in self._repos:
+                clash = f"{self._repos[name]}, {repo}"
+                raise ValueError(f"two repos named {name!r}: {clash}")
+            self._repos[name] = repo
 
-    def documents(self) -> Iterator[RawDocument]:
-        for repo in self.repos:
-            yield from self._repo_documents(repo)
+    def refs(self) -> Iterator[DocRef]:
+        for name, repo in self._repos.items():
+            tree = _git(repo, "ls-tree", "-r", "-z", "HEAD")
+            for entry in tree.split("\0"):
+                if not entry:
+                    continue
+                meta, path = entry.split("\t", 1)
+                _mode, obj_type, sha = meta.split()
+                kind = classify(path)
+                if obj_type == "blob" and kind is not None:
+                    yield DocRef(repo=name, path=path, sha=sha, kind=kind)
 
-    def _repo_documents(self, repo: Path) -> Iterator[RawDocument]:
-        tree = _git(repo, "ls-tree", "-r", "-z", "HEAD")
-        for entry in tree.split("\0"):
-            if not entry:
-                continue
-            meta, path = entry.split("\t", 1)
-            _mode, obj_type, sha = meta.split()
-            kind = classify(path)
-            if obj_type != "blob" or kind is None:
-                continue
-            yield RawDocument(
-                repo=repo.resolve().name,
-                path=path,
-                sha=sha,
-                kind=kind,
-                content=_git(repo, "cat-file", "blob", sha),
-            )
+    def read(self, ref: DocRef) -> str:
+        return _git(self._repos[ref.repo], "cat-file", "blob", ref.sha)
 
 
 def _git(repo: Path, *args: str) -> str:
