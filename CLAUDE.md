@@ -12,6 +12,7 @@ layer come later (see README roadmap).
 - `make check`: ruff lint, ruff format check, pyright (strict), pytest. Must be green before any commit.
 - `make fmt`: autofix lint and format
 - `uv run adrscape health`: connectivity check for all three services
+- `uv run adrscape fetch <repo>...` / `embed` / `search "..."`: ingest local clones into `data/raw/`, embed into pgvector (needs `OPENAI_API_KEY`), query
 
 ## Layout
 

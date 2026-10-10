@@ -9,9 +9,11 @@ from neo4j import GraphDatabase
 
 from adrscape.config import get_settings
 from adrscape.ingest.chunk import chunk_docs
+from adrscape.ingest.embed import Embed, openai_embedder
 from adrscape.ingest.fetch import fetch as fetch_source
 from adrscape.ingest.parse import load_docs
 from adrscape.ingest.source import LocalGitSource, Source
+from adrscape.store import postgres
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -98,3 +100,36 @@ def chunks(full: bool = False) -> None:
         if full:
             typer.echo(f"{c.text}\n")
     typer.echo(f"{count} chunks from {len(docs)} documents")
+
+
+def _embedder() -> Embed:
+    key = get_settings().openai_api_key
+    if key is None:
+        typer.echo("OPENAI_API_KEY is not set (see .env.example)", err=True)
+        raise typer.Exit(code=1)
+    return openai_embedder(key.get_secret_value())
+
+
+@app.command()
+def embed() -> None:
+    """Embed the raw dir's chunks into Postgres; skip documents already stored."""
+    settings = get_settings()
+    chunked = chunk_docs(load_docs(settings.raw_dir))
+    with postgres.connect(settings.postgres_dsn) as conn:
+        report = postgres.sync(conn, chunked, _embedder())
+    typer.echo(
+        f"{report.embedded} documents embedded ({report.chunks} chunks), "
+        f"{report.unchanged} unchanged, {report.removed} removed"
+    )
+
+
+@app.command()
+def search(query: str, k: int = 5, full: bool = False) -> None:
+    """Semantic search over the embedded chunks, best match first."""
+    [vector] = _embedder()([query])
+    with postgres.connect(get_settings().postgres_dsn) as conn:
+        hits = postgres.search(conn, vector, k)
+    for h in hits:
+        typer.echo(f"{h.score:.3f}  {h.kind:<9} {h.repo}/{h.path}#{h.ord}  {h.heading}")
+        if full:
+            typer.echo(f"{h.text}\n")

@@ -13,10 +13,19 @@ processes like ADR review.
 
 ## Status
 
-**v0 in progress.** What runs today: both databases in compose, a health check,
-and the first `Source`: `uv run adrscape docs <repo>...` lists the ADRs, READMEs,
-docs and manifests it would ingest from local git clones. Nothing is stored yet.
-Why: [ADR-001](docs/adr/001-source-protocol-and-document-identity.md).
+**v0 in progress.** What runs today: ingestion from local git clones into
+semantic search.
+
+```bash
+uv run adrscape fetch ../repo-a ../repo-b   # ADRs, READMEs, docs/, manifests -> data/raw
+uv run adrscape embed                       # chunk + embed into pgvector, unchanged docs skipped
+uv run adrscape search "why is the fan-out on the server"
+```
+
+Why: [ADR-001](docs/adr/001-source-protocol-and-document-identity.md) (document
+identity), [ADR-002](docs/adr/002-heading-aware-chunking.md) (chunking),
+[ADR-003](docs/adr/003-openai-embeddings-in-pgvector.md) (embeddings). Graph,
+LLM extraction and MCP tools come next.
 
 ## Architecture (target)
 
@@ -75,7 +84,7 @@ searching code is a separate problem that tools like Sourcegraph already solve.
 Requires [uv](https://docs.astral.sh/uv/) and Podman (or Docker) with compose.
 
 ```bash
-make setup               # install deps, create .env
+make setup               # install deps, create .env (set OPENAI_API_KEY)
 make up                  # Postgres + pgvector (port 5433), Neo4j (7474, 7687)
 uv run adrscape health   # OK per service
 make check               # ruff, pyright (strict), pytest

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: SecretStr = SecretStr("adrscape-dev")
     raw_dir: Path = Path("data/raw")
+    openai_api_key: SecretStr | None = None
 
 
 @lru_cache
