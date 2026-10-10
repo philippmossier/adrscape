@@ -118,6 +118,36 @@ def sync(conn: Conn, chunks: Iterable[Chunk], embed: Embed) -> SyncReport:
     )
 
 
+def similar_adrs(conn: Conn, doc: DocKey, k: int) -> list[tuple[str, str]] | None:
+    """The `k` ADRs closest to a stored document, as (repo, path), best first.
+
+    The document's vector is the mean of its chunk vectors; an ADR scores by
+    its best chunk. No API call: everything is already in the table. Returns
+    None if the document is not stored at this sha (embed has not run).
+    """
+    rows = conn.execute(
+        "WITH q AS (SELECT avg(embedding) AS v FROM chunks"
+        "           WHERE repo = %(repo)s AND path = %(path)s AND sha = %(sha)s)"
+        " SELECT c.repo, c.path FROM chunks c, q"
+        " WHERE q.v IS NOT NULL AND c.kind = 'adr'"
+        "   AND NOT (c.repo = %(repo)s AND c.path = %(path)s)"
+        " GROUP BY c.repo, c.path"
+        " ORDER BY min(c.embedding <=> q.v) LIMIT %(k)s",
+        {"repo": doc[0], "path": doc[1], "sha": doc[2], "k": k},
+    ).fetchall()
+    if not rows and not _stored(conn, doc):
+        return None
+    return [(r[0], r[1]) for r in rows]
+
+
+def _stored(conn: Conn, doc: DocKey) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM chunks WHERE repo = %s AND path = %s AND sha = %s LIMIT 1",
+        doc,
+    ).fetchone()
+    return row is not None
+
+
 def search(conn: Conn, query: list[float], k: int = 5) -> list[Hit]:
     """Nearest chunks by cosine distance (`<=>`), best first."""
     with conn.cursor(row_factory=class_row(Hit)) as cur:

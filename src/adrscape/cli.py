@@ -10,6 +10,8 @@ from neo4j import GraphDatabase
 from adrscape.config import get_settings
 from adrscape.ingest.chunk import chunk_docs
 from adrscape.ingest.embed import Embed, openai_embedder
+from adrscape.ingest.extract import CANDIDATES, ExtractedDoc, OpenAIExtractor
+from adrscape.ingest.extract import sync as extract_sync
 from adrscape.ingest.fetch import fetch as fetch_source
 from adrscape.ingest.parse import load_docs
 from adrscape.ingest.source import LocalGitSource, Source
@@ -102,12 +104,16 @@ def chunks(full: bool = False) -> None:
     typer.echo(f"{count} chunks from {len(docs)} documents")
 
 
-def _embedder() -> Embed:
+def _openai_key() -> str:
     key = get_settings().openai_api_key
     if key is None:
         typer.echo("OPENAI_API_KEY is not set (see .env.example)", err=True)
         raise typer.Exit(code=1)
-    return openai_embedder(key.get_secret_value())
+    return key.get_secret_value()
+
+
+def _embedder() -> Embed:
+    return openai_embedder(_openai_key())
 
 
 @app.command()
@@ -133,3 +139,47 @@ def search(query: str, k: int = 5, full: bool = False) -> None:
         typer.echo(f"{h.score:.3f}  {h.kind:<9} {h.repo}/{h.path}#{h.ord}  {h.heading}")
         if full:
             typer.echo(f"{h.text}\n")
+
+
+def _show(record: ExtractedDoc) -> None:
+    e = record.extraction
+    typer.echo(f"{record.ref.kind:<9} {record.ref.repo}/{record.ref.path}")
+    if e.status:
+        typer.echo(f"  status        {e.status}")
+    for name, values in [
+        ("technologies", e.technologies),
+        ("teams", e.teams),
+        ("revises", [link.target for link in e.revises]),
+        ("revisits", [link.target for link in e.revisits]),
+        ("depends_on", [link.target for link in e.depends_on]),
+        ("affects", e.affects),
+    ]:
+        if values:
+            typer.echo(f"  {name:<13} {', '.join(values)}")
+    for reason in record.dropped:
+        typer.echo(f"  dropped       {reason}")
+
+
+@app.command()
+def extract() -> None:
+    """Fill the domain schema per document with the LLM; skip unchanged ones.
+
+    Needs `embed` first: revision candidates come from the vector store.
+    """
+    settings = get_settings()
+    docs = load_docs(settings.raw_dir)
+    with postgres.connect(settings.postgres_dsn) as conn:
+        report = extract_sync(
+            docs,
+            settings.extracted_path,
+            OpenAIExtractor(_openai_key()),
+            lambda ref: postgres.similar_adrs(
+                conn, (ref.repo, ref.path, ref.sha), CANDIDATES
+            ),
+            on_extracted=_show,
+        )
+    typer.echo(
+        f"{report.extracted} documents extracted, {report.unchanged} unchanged, "
+        f"{report.removed} removed, {report.dropped} links dropped "
+        f"-> {settings.extracted_path}"
+    )

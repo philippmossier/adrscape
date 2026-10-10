@@ -13,12 +13,14 @@ layer come later (see README roadmap).
 - `make fmt`: autofix lint and format
 - `uv run adrscape health`: connectivity check for all three services
 - `uv run adrscape fetch <repo>...` / `embed` / `search "..."`: ingest local clones into `data/raw/`, embed into pgvector (needs `OPENAI_API_KEY`), query
+- `uv run adrscape extract`: LLM fills the domain schema per document into `data/extracted.json` (needs `embed` first; unchanged docs skipped)
 
 ## Layout
 
 - `src/adrscape/config.py`: typed settings from env / `.env` (pydantic-settings)
 - `src/adrscape/cli.py`: typer CLI, entry point `adrscape`
-- `src/adrscape/ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed
+- `src/adrscape/domain.py`: the ADR domain schema the LLM fills (third seam)
+- `src/adrscape/ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed, extract (`Extractor` protocol)
 - `src/adrscape/store/`: `postgres.py` (vectors), `graph.py` (Neo4j)
 - `src/adrscape/mcp_server.py`: MCP tools
 - `docs/adr/`: architecture decision records, written when the decision is made

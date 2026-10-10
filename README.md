@@ -14,18 +14,20 @@ processes like ADR review.
 ## Status
 
 **v0 in progress.** What runs today: ingestion from local git clones into
-semantic search.
+semantic search, plus LLM extraction of entities and relations.
 
 ```bash
 uv run adrscape fetch ../repo-a ../repo-b   # ADRs, READMEs, docs/, manifests -> data/raw
 uv run adrscape embed                       # chunk + embed into pgvector, unchanged docs skipped
 uv run adrscape search "why is the fan-out on the server"
+uv run adrscape extract                     # LLM fills the domain schema -> data/extracted.json
 ```
 
 Why: [ADR-001](docs/adr/001-source-protocol-and-document-identity.md) (document
 identity), [ADR-002](docs/adr/002-heading-aware-chunking.md) (chunking),
-[ADR-003](docs/adr/003-openai-embeddings-in-pgvector.md) (embeddings). Graph,
-LLM extraction and MCP tools come next.
+[ADR-003](docs/adr/003-openai-embeddings-in-pgvector.md) (embeddings),
+[ADR-004](docs/adr/004-llm-extraction-with-checked-links.md) (extraction). The
+graph and MCP tools come next.
 
 ## Architecture (target)
 

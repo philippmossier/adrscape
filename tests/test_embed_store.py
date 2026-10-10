@@ -2,6 +2,7 @@ import re
 import uuid
 import zlib
 from collections.abc import Iterator, Sequence
+from dataclasses import replace
 
 import psycopg
 import pytest
@@ -125,3 +126,27 @@ def test_search_ranks_the_closest_chunk_first(conn: postgres.Conn) -> None:
     assert hits[0].path == "queue.md"
     assert hits[0].score > hits[1].score
     assert hits[0].kind == "adr"
+
+
+def test_similar_adrs_ranks_other_adrs_and_skips_the_document(
+    conn: postgres.Conn,
+) -> None:
+    readme = replace(chunk("README.md", "kafka queue overview"), kind=DocKind.README)
+    postgres.sync(
+        conn,
+        [
+            chunk("queue.md", "we use kafka as message queue"),
+            chunk("kafka.md", "kafka retention for the queue"),
+            chunk("ui.md", "react components and css"),
+            readme,
+        ],
+        FakeEmbedder(),
+    )
+
+    similar = postgres.similar_adrs(conn, ("repo-a", "queue.md", "aaa"), k=5)
+
+    assert similar is not None
+    assert similar[0] == ("repo-a", "kafka.md")
+    assert ("repo-a", "queue.md") not in similar  # itself
+    assert ("repo-a", "README.md") not in similar  # not an ADR
+    assert postgres.similar_adrs(conn, ("repo-a", "queue.md", "zzz"), k=5) is None
