@@ -14,20 +14,24 @@ processes like ADR review.
 ## Status
 
 **v0 in progress.** What runs today: ingestion from local git clones into
-semantic search, plus LLM extraction of entities and relations.
+semantic search, LLM extraction of entities and relations, and a Neo4j graph
+that answers "which decision is in force" and "which projects are affected".
 
 ```bash
 uv run adrscape fetch ../repo-a ../repo-b   # ADRs, READMEs, docs/, manifests -> data/raw
 uv run adrscape embed                       # chunk + embed into pgvector, unchanged docs skipped
 uv run adrscape search "why is the fan-out on the server"
 uv run adrscape extract                     # LLM fills the domain schema -> data/extracted.json
+uv run adrscape graph                       # load the extraction into Neo4j, unchanged docs skipped
+uv run adrscape decisions                   # ADRs: in force or revised, and where they are revisited
+uv run adrscape affected repo-a:docs/adr/0001-x.md   # projects a decision touches, via depends_on
 ```
 
 Why: [ADR-001](docs/adr/001-source-protocol-and-document-identity.md) (document
 identity), [ADR-002](docs/adr/002-heading-aware-chunking.md) (chunking),
 [ADR-003](docs/adr/003-openai-embeddings-in-pgvector.md) (embeddings),
-[ADR-004](docs/adr/004-llm-extraction-with-checked-links.md) (extraction). The
-graph and MCP tools come next.
+[ADR-004](docs/adr/004-llm-extraction-with-checked-links.md) (extraction),
+[ADR-005](docs/adr/005-two-databases.md) (two databases). MCP tools come next.
 
 ## Architecture (target)
 
@@ -73,8 +77,8 @@ graph TD
 Two databases on purpose: pgvector answers "what is similar in meaning"
 ("did we decide anything about message queues?" finds an ADR that only says
 "Kafka"); Neo4j answers "how is it connected" (which decision is in force, which
-projects are affected if a protocol changes). The ADR for that choice lands with
-the graph step.
+projects are affected if a protocol changes). See
+[ADR-005](docs/adr/005-two-databases.md).
 
 **What adrscape reads:** ADRs, READMEs, `docs/` and manifests (`package.json`,
 `pyproject.toml`, compose files). **What it does not read:** the source code
@@ -87,7 +91,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Podman (or Docker) with compose.
 
 ```bash
 make setup               # install deps, create .env (set OPENAI_API_KEY)
-make up                  # Postgres + pgvector (port 5433), Neo4j (7474, 7687)
+make up                  # Postgres + pgvector (5433), Neo4j (7474, 7687), test Neo4j (7688)
 uv run adrscape health   # OK per service
 make check               # ruff, pyright (strict), pytest
 ```

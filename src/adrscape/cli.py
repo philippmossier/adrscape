@@ -5,16 +5,18 @@ from pathlib import Path
 
 import psycopg
 import typer
-from neo4j import GraphDatabase
+from neo4j import Driver, GraphDatabase
 
 from adrscape.config import get_settings
 from adrscape.ingest.chunk import chunk_docs
 from adrscape.ingest.embed import Embed, openai_embedder
 from adrscape.ingest.extract import CANDIDATES, ExtractedDoc, OpenAIExtractor
+from adrscape.ingest.extract import load as load_extracted
 from adrscape.ingest.extract import sync as extract_sync
 from adrscape.ingest.fetch import fetch as fetch_source
 from adrscape.ingest.parse import load_docs
 from adrscape.ingest.source import LocalGitSource, Source
+from adrscape.store import graph as kg
 from adrscape.store import postgres
 
 app = typer.Typer(no_args_is_help=True)
@@ -183,3 +185,58 @@ def extract() -> None:
         f"{report.removed} removed, {report.dropped} links dropped "
         f"-> {settings.extracted_path}"
     )
+
+
+def _graph() -> Driver:
+    settings = get_settings()
+    return kg.connect(
+        settings.neo4j_uri,
+        settings.neo4j_user,
+        settings.neo4j_password.get_secret_value(),
+    )
+
+
+@app.command()
+def graph() -> None:
+    """Load the extraction records into Neo4j; skip documents already there."""
+    settings = get_settings()
+    docs = load_docs(settings.raw_dir)
+    records = load_extracted(settings.extracted_path)
+    with _graph() as driver:
+        report = kg.sync(driver, docs, records)
+    typer.echo(
+        f"{report.written} documents written, {report.unchanged} unchanged, "
+        f"{report.removed} removed"
+    )
+
+
+@app.command()
+def decisions(project: str | None = None) -> None:
+    """List ADRs: in force, or what revises them; plus where they're revisited."""
+    with _graph() as driver:
+        found = kg.decisions(driver, project)
+    for d in found:
+        verdict = "in force" if d.in_force else (d.status or "revised")
+        typer.echo(f"{verdict:<11} {d.date or '?':<10}  {d.id}")
+        for label, ids in [
+            ("revised by", d.revised_by),
+            ("revisits", d.revisits),
+            ("revisited by", d.revisited_by),
+        ]:
+            for i in ids:
+                typer.echo(f"{'':<23}  {label} {i}")
+    in_force = sum(d.in_force for d in found)
+    typer.echo(f"{in_force} of {len(found)} decisions in force")
+
+
+@app.command()
+def affected(adr: str) -> None:
+    """Projects a decision touches, directly or through `depends_on` (repo:path)."""
+    with _graph() as driver:
+        found = kg.affected(driver, adr)
+    if not found:
+        typer.echo(f"no affected projects for {adr} (id is repo:path)", err=True)
+        raise typer.Exit(code=1)
+    for a in found:
+        how = "named" if a.hops == 0 else f"{a.hops} hop{'s' * (a.hops > 1)}"
+        typer.echo(f"{how:<8} {a.project}")

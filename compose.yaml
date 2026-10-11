@@ -33,6 +33,19 @@ services:
       timeout: 5s
       retries: 12
 
+  # Community edition has one database, so tests get their own instance:
+  # in memory, wiped by every test, never the dev graph.
+  neo4j-test:
+    image: docker.io/library/neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/adrscape-dev
+      NEO4J_server_memory_heap_max__size: 256m
+      NEO4J_server_memory_pagecache_size: 64m
+    ports:
+      - "7688:7687"
+    tmpfs:
+      - /data
+
 volumes:
   pgdata:
   neo4jdata:

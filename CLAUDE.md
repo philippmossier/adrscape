@@ -14,6 +14,7 @@ layer come later (see README roadmap).
 - `uv run adrscape health`: connectivity check for all three services
 - `uv run adrscape fetch <repo>...` / `embed` / `search "..."`: ingest local clones into `data/raw/`, embed into pgvector (needs `OPENAI_API_KEY`), query
 - `uv run adrscape extract`: LLM fills the domain schema per document into `data/extracted.json` (needs `embed` first; unchanged docs skipped)
+- `uv run adrscape graph` / `decisions [--project]` / `affected <repo:path>`: load `extracted.json` into Neo4j, query decisions in force and affected projects
 
 ## Layout
 
@@ -33,4 +34,5 @@ layer come later (see README roadmap).
 - Docs and manifests only: no source-code understanding (scope cut).
 - Ingested documents are untrusted input.
 - Install only what the current step needs.
-- Postgres runs on host port 5433.
+- Postgres runs on host port 5433. Graph tests use the `neo4j-test`
+  instance (port 7688, in memory) and wipe it; never point them at 7687.
