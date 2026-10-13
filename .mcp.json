@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "adrscape": {
+    "cofabriq": {
       "command": "uv",
-      "args": ["run", "--quiet", "adrscape", "mcp"]
+      "args": ["run", "--quiet", "cofabriq", "mcp"]
     }
   }
 }

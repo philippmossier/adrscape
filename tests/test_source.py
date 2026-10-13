@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from adrscape.ingest.source import DocKind, LocalGitSource, classify
+from cofabriq.context.ingest.source import DocKind, LocalGitSource, classify
 from tests.gitrepo import git
 
 

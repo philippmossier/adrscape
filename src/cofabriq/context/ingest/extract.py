@@ -10,9 +10,9 @@ from typing import Protocol
 from openai import OpenAI
 from pydantic import BaseModel, TypeAdapter
 
-from adrscape.domain import Extraction, Link
-from adrscape.ingest.parse import ParsedDoc
-from adrscape.ingest.source import DocKind, DocRef
+from cofabriq.context.domain import Extraction, Link
+from cofabriq.context.ingest.parse import ParsedDoc
+from cofabriq.context.ingest.source import DocKind, DocRef
 
 MODEL = "gpt-6-luna"
 # Stored with every record. Bump the suffix when the prompt or the schema

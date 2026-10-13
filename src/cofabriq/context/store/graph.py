@@ -20,9 +20,9 @@ from typing import LiteralString
 
 from neo4j import Driver, GraphDatabase, ManagedTransaction
 
-from adrscape.domain import AdrStatus, Link
-from adrscape.ingest.extract import ExtractedDoc, doc_id
-from adrscape.ingest.parse import ParsedDoc
+from cofabriq.context.domain import AdrStatus, Link
+from cofabriq.context.ingest.extract import ExtractedDoc, doc_id
+from cofabriq.context.ingest.parse import ParsedDoc
 
 # Bump when the graph shape or ALIASES change: every document is rewritten.
 GRAPH_VERSION = 1

@@ -1,5 +1,5 @@
 [project]
-name = "adrscape"
+name = "cofabriq"
 version = "0.1.0"
 description = "Map a company's engineering landscape from its repos: ADRs, docs, manifests into a knowledge graph, semantic search and MCP tools."
 readme = "README.md"
@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-adrscape = "adrscape.cli:app"
+cofabriq = "cofabriq.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]

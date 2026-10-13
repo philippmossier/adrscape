@@ -1,6 +1,11 @@
-from adrscape.ingest.chunk import chunk_doc
-from adrscape.ingest.parse import ManifestParser, MarkdownParser, ParsedDoc, Section
-from adrscape.ingest.source import DocKind, DocRef
+from cofabriq.context.ingest.chunk import chunk_doc
+from cofabriq.context.ingest.parse import (
+    ManifestParser,
+    MarkdownParser,
+    ParsedDoc,
+    Section,
+)
+from cofabriq.context.ingest.source import DocKind, DocRef
 
 ADR = """# 1. Use SSE
 

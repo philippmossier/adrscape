@@ -5,10 +5,10 @@ from dataclasses import replace
 
 import pytest
 
-from adrscape.ingest.chunk import Chunk
-from adrscape.ingest.embed import DIM, embed_input
-from adrscape.ingest.source import DocKind
-from adrscape.store import postgres
+from cofabriq.context.ingest.chunk import Chunk
+from cofabriq.context.ingest.embed import DIM, embed_input
+from cofabriq.context.ingest.source import DocKind
+from cofabriq.context.store import postgres
 
 
 class FakeEmbedder:

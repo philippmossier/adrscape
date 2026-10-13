@@ -11,8 +11,8 @@ from psycopg import sql
 from psycopg.rows import TupleRow, class_row
 from psycopg.types.json import Jsonb
 
-from adrscape.ingest.chunk import Chunk
-from adrscape.ingest.embed import DIM, Embed, embed_input
+from cofabriq.context.ingest.chunk import Chunk
+from cofabriq.context.ingest.embed import DIM, Embed, embed_input
 
 type Conn = psycopg.Connection[TupleRow]
 type DocKey = tuple[str, str, str]  # (repo, path, sha)

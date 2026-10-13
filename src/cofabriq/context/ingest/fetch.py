@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
-from adrscape.ingest.source import DocRef, Source
+from cofabriq.context.ingest.source import DocRef, Source
 
 INDEX_FILE = "index.json"
 _index_adapter = TypeAdapter(list[DocRef])

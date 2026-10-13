@@ -1,4 +1,4 @@
-"""Command-line entry point (`adrscape ...`)."""
+"""Command-line entry point (`cofabriq ...`)."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -7,18 +7,18 @@ import psycopg
 import typer
 from neo4j import Driver, GraphDatabase
 
-from adrscape.config import get_settings
-from adrscape.ingest.chunk import chunk_docs
-from adrscape.ingest.embed import Embed, openai_embedder
-from adrscape.ingest.extract import CANDIDATES, ExtractedDoc, OpenAIExtractor
-from adrscape.ingest.extract import load as load_extracted
-from adrscape.ingest.extract import sync as extract_sync
-from adrscape.ingest.fetch import fetch as fetch_source
-from adrscape.ingest.parse import load_docs
-from adrscape.ingest.source import LocalGitSource, Source
-from adrscape.mcp_server import build as build_mcp
-from adrscape.store import graph as kg
-from adrscape.store import postgres
+from cofabriq.config import get_settings
+from cofabriq.context.ingest.chunk import chunk_docs
+from cofabriq.context.ingest.embed import Embed, openai_embedder
+from cofabriq.context.ingest.extract import CANDIDATES, ExtractedDoc, OpenAIExtractor
+from cofabriq.context.ingest.extract import load as load_extracted
+from cofabriq.context.ingest.extract import sync as extract_sync
+from cofabriq.context.ingest.fetch import fetch as fetch_source
+from cofabriq.context.ingest.parse import load_docs
+from cofabriq.context.ingest.source import LocalGitSource, Source
+from cofabriq.context.store import graph as kg
+from cofabriq.context.store import postgres
+from cofabriq.mcp_server import build as build_mcp
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -72,7 +72,7 @@ def health() -> None:
 
 @app.command()
 def docs(repos: list[Path]) -> None:
-    """List the documents adrscape would ingest from local git clones."""
+    """List the documents cofabriq would ingest from local git clones."""
     source: Source = LocalGitSource(repos)
     count = 0
     for ref in source.refs():

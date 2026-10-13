@@ -8,8 +8,8 @@ from neo4j import Driver
 from neo4j.exceptions import ServiceUnavailable
 from psycopg import sql
 
-from adrscape.config import get_settings
-from adrscape.store import graph, postgres
+from cofabriq.config import get_settings
+from cofabriq.context.store import graph, postgres
 from tests.gitrepo import init_repo
 
 

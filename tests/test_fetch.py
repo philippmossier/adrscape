@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from adrscape.ingest.fetch import fetch, load_index
-from adrscape.ingest.source import DocKind, DocRef, LocalGitSource
+from cofabriq.context.ingest.fetch import fetch, load_index
+from cofabriq.context.ingest.source import DocKind, DocRef, LocalGitSource
 from tests.gitrepo import commit_all, init_repo
 
 

@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from adrscape.domain import AdrStatus, Extraction, Link
-from adrscape.ingest.extract import VERSION, Candidate, check, load, sync
-from adrscape.ingest.parse import MarkdownParser, ParsedDoc
-from adrscape.ingest.source import DocKind, DocRef
+from cofabriq.context.domain import AdrStatus, Extraction, Link
+from cofabriq.context.ingest.extract import VERSION, Candidate, check, load, sync
+from cofabriq.context.ingest.parse import MarkdownParser, ParsedDoc
+from cofabriq.context.ingest.source import DocKind, DocRef
 
 FANOUT_TS = """# 3. Fan-out in the browser
 

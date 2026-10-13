@@ -4,8 +4,8 @@ from typing import Any
 from mcp import Client
 from neo4j import Driver
 
-from adrscape.mcp_server import build
-from adrscape.store import postgres
+from cofabriq.context.store import postgres
+from cofabriq.mcp_server import build
 from tests.test_embed_store import FakeEmbedder, chunk
 from tests.test_graph import adr, link, sync
 

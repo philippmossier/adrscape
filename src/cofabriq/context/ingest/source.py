@@ -78,7 +78,7 @@ def classify(path: str) -> DocKind | None:
     Docs and manifests only; source code is out of scope. Every committed
     markdown file counts except a small denylist: docs folders are named too
     differently (`docs`, `documentation`, `wiki`) for an allowlist, and a
-    missing doc is silent while a noisy one shows up in `adrscape docs`.
+    missing doc is silent while a noisy one shows up in `cofabriq docs`.
     ADR folders vary as well (`docs/adr`, `docs/architecture/decisions`,
     `docs/arch/adr-001-*`), so ADRs are matched by folder name or filename.
     """

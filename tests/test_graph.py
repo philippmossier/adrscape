@@ -2,11 +2,11 @@ from typing import LiteralString
 
 from neo4j import Driver
 
-from adrscape.domain import AdrStatus, Extraction, Link
-from adrscape.ingest.extract import VERSION, ExtractedDoc
-from adrscape.ingest.parse import MarkdownParser, ParsedDoc
-from adrscape.ingest.source import DocKind, DocRef
-from adrscape.store import graph
+from cofabriq.context.domain import AdrStatus, Extraction, Link
+from cofabriq.context.ingest.extract import VERSION, ExtractedDoc
+from cofabriq.context.ingest.parse import MarkdownParser, ParsedDoc
+from cofabriq.context.ingest.source import DocKind, DocRef
+from cofabriq.context.store import graph
 
 
 def adr(

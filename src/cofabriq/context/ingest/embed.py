@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 
 from openai import OpenAI
 
-from adrscape.ingest.chunk import Chunk
+from cofabriq.context.ingest.chunk import Chunk
 
 # The dimension is baked into the `chunks.embedding` column: changing the
 # model means a new column and a full re-embed (ADR-003).

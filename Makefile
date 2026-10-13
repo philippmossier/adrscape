@@ -22,4 +22,4 @@ fmt:    ## autofix lint + format
 	uv run ruff format .
 
 health: ## check DB connectivity
-	uv run adrscape health
+	uv run cofabriq health

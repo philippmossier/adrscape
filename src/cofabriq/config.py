@@ -10,10 +10,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    postgres_dsn: str = "postgresql://adrscape:adrscape@localhost:5433/adrscape"
+    postgres_dsn: str = "postgresql://cofabriq:cofabriq@localhost:5433/cofabriq"
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: SecretStr = SecretStr("adrscape-dev")
+    neo4j_password: SecretStr = SecretStr("cofabriq-dev")
     raw_dir: Path = Path("data/raw")
     extracted_path: Path = Path("data/extracted.json")
     openai_api_key: SecretStr | None = None

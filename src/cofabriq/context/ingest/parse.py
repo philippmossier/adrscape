@@ -9,8 +9,8 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from adrscape.ingest.fetch import load_index, raw_path
-from adrscape.ingest.source import DocKind, DocRef
+from cofabriq.context.ingest.fetch import load_index, raw_path
+from cofabriq.context.ingest.source import DocKind, DocRef
 
 
 @dataclass(frozen=True)

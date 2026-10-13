@@ -4,8 +4,8 @@ import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 
-from adrscape.ingest.parse import ParsedDoc, Section
-from adrscape.ingest.source import DocKind
+from cofabriq.context.ingest.parse import ParsedDoc, Section
+from cofabriq.context.ingest.source import DocKind
 
 # ~600 tokens. Every ADR in the dev fixture (max 2103 chars) fits whole, so
 # Context and Decision are never embedded apart. Step 4's model must take it.

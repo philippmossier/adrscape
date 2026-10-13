@@ -1,7 +1,7 @@
 from typer.testing import CliRunner
 
-from adrscape.cli import app
-from adrscape.config import Settings
+from cofabriq.cli import app
+from cofabriq.config import Settings
 
 
 def test_settings_have_defaults() -> None:
