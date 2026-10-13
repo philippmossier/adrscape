@@ -148,13 +148,18 @@ def _stored(conn: Conn, doc: DocKey) -> bool:
     return row is not None
 
 
-def search(conn: Conn, query: list[float], k: int = 5) -> list[Hit]:
-    """Nearest chunks by cosine distance (`<=>`), best first."""
+def search(
+    conn: Conn, query: list[float], k: int = 5, repo: str | None = None
+) -> list[Hit]:
+    """Nearest chunks by cosine distance (`<=>`), best first, optionally in
+    one repo. With a repo filter the HNSW scan can return fewer than k rows.
+    """
     with conn.cursor(row_factory=class_row(Hit)) as cur:
         cur.execute(
             "SELECT repo, path, ord, kind, heading, text,"
             " 1 - (embedding <=> %(q)s) AS score"
-            " FROM chunks ORDER BY embedding <=> %(q)s LIMIT %(k)s",
-            {"q": Vector(query), "k": k},
+            " FROM chunks WHERE %(repo)s::text IS NULL OR repo = %(repo)s"
+            " ORDER BY embedding <=> %(q)s LIMIT %(k)s",
+            {"q": Vector(query), "k": k, "repo": repo},
         )
         return cur.fetchall()

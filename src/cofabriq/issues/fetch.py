@@ -76,6 +76,11 @@ def load_issues(issues_dir: Path, repo: str) -> list[Issue]:
     ]
 
 
+def load_issue(issues_dir: Path, repo: str, number: int) -> Issue | None:
+    path = issue_dir(issues_dir, repo) / f"{number}.json"
+    return Issue.model_validate_json(path.read_bytes()) if path.is_file() else None
+
+
 def _write_index(repo_dir: Path, index: dict[int, datetime]) -> None:
     tmp = repo_dir / f"{INDEX_FILE}.tmp"
     tmp.write_bytes(_index_adapter.dump_json(dict(sorted(index.items())), indent=2))

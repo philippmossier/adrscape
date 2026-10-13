@@ -1,0 +1,13 @@
+# Components of the target repo, for triage: name = what belongs to it.
+# The triage card's `component` must be one of these names (or null).
+# Descriptions are part of the prompt. The v2 repo map derives this list
+# from paths and manifests; until then it is written by hand.
+
+[components]
+hardware-check = "GPU, memory and storage detection in the browser, the GPU bandwidth benchmark, the machine tier, the model recommendation and the speed advice after the first answer (src/lib/hardware)."
+models = "The model catalog, the model picker, downloading model weights from Hugging Face, the model cache, loading progress and switching models (src/lib/models, model-picker, loading)."
+inference = "Running the model: the Web Worker with Transformers.js, WebGPU and WebAssembly backends, token streaming, generation speed, load errors from the runtime (src/lib/engine)."
+chat = "Conversations: sending and streaming messages, the composer, message rendering, the chat sidebar and chat history in localStorage (src/lib/chat, chat components)."
+privacy = "The network request counter and privacy panel, the Content-Security-Policy, delete everything, the compliance page (src/lib/privacy, docs/for-it-and-compliance.md)."
+ui = "Layout, theme, German and English texts, language detection, accessibility, shadcn components (src/components/ui, lang, labels, theme)."
+build-deploy = "Vite build, the copied WebAssembly runtime, response headers, Cloudflare deploy, CI and dependencies (vite.config.ts, scripts, wrangler, .github)."

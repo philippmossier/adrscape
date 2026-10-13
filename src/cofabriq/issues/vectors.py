@@ -111,3 +111,12 @@ def nearest(
         {"repo": repo, "n": number, "before": before, "k": k},
     ).fetchall()
     return [Neighbour(number=r[0], score=float(r[1])) for r in rows]
+
+
+def embedding(conn: Conn, repo: str, number: int) -> list[float] | None:
+    """The stored vector of one issue, None if it was never embedded."""
+    row = conn.execute(
+        "SELECT embedding FROM issues WHERE repo = %s AND number = %s",
+        (repo, number),
+    ).fetchone()
+    return None if row is None else row[0].to_list()

@@ -1,6 +1,7 @@
 """Command-line entry point (`cofabriq ...`)."""
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import fmean, median
@@ -21,6 +22,8 @@ from cofabriq.context.ingest.source import LocalGitSource, Source
 from cofabriq.context.store import graph as kg
 from cofabriq.context.store import postgres
 from cofabriq.eval import dedupe
+from cofabriq.eval import triage as triage_eval
+from cofabriq.issues import triage as triage_mod
 from cofabriq.issues import vectors
 from cofabriq.issues import verdict as verdict_mod
 from cofabriq.issues.fetch import fetch_issues, load_issues
@@ -215,6 +218,44 @@ def eval_dedupe(repo: str | None = None, verdict: bool = False) -> None:
         )
 
 
+@eval_app.command("triage")
+def eval_triage(
+    repo: str | None = None, seed: Path = Path("playground/seed.toml")
+) -> None:
+    """Type, component, duplicate and injection checks on the seeded issues.
+
+    Paid: two LLM calls per seeded issue, nothing cached. Needs the seeded
+    issues fetched and embedded, and the repo's docs embedded.
+    """
+    settings = get_settings()
+    target = _target_repo(repo)
+    items = triage_eval.load_seed(seed)
+    matched = triage_eval.match(items, load_issues(settings.issues_dir, target))
+    with postgres.connect(settings.postgres_dsn) as conn:
+        conn.autocommit = True  # one connection shared by the threads, reads only
+        run = _triage_fn(conn, target)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            found = pool.map(run, [i.number for i in matched.values()])
+            cards = dict(zip(matched, found, strict=True))
+    numbers = {k: i.number for k, i in matched.items()}
+    s = triage_eval.score(items, cards, numbers)
+    runs = [c.run for c in cards.values()]
+    typer.echo(f"{target}: {s.n} seeded issues ({seed})")
+    typer.echo(f"  type       {s.type_ok}/{s.n}")
+    typer.echo(f"  component  {s.component_ok}/{s.n}")
+    typer.echo(
+        f"  duplicate  {s.duplicates_found}/{s.duplicates} found, "
+        f"{s.false_duplicates} false duplicate_of"
+    )
+    typer.echo(f"  injections followed {s.injections_followed}/{s.injections}")
+    typer.echo(
+        f"  per issue: ${fmean(r.cost_usd for r in runs):.5f} mean, "
+        f"{median(r.latency_ms for r in runs) / 1000:.1f} s median latency"
+    )
+    for miss in s.misses:
+        typer.echo(f"  miss  {miss}")
+
+
 def _verdicts(
     repo: str, ranked: list[dedupe.Ranked], issues: dict[int, Issue]
 ) -> dict[int, verdict_mod.VerdictRecord]:
@@ -234,6 +275,65 @@ def _verdicts(
     records, report = verdict_mod.judge_all(jobs, path, judge)
     typer.echo(f"  verdicts: {report.judged} judged, {report.cached} cached -> {path}")
     return records
+
+
+def _triage_fn(
+    conn: postgres.Conn, repo: str
+) -> Callable[[int], triage_mod.TriageCard]:
+    """Gather from the local stores, then both LLM calls."""
+    settings = get_settings()
+    key = _openai_key()
+    triager, judge = triage_mod.OpenAITriager(key), verdict_mod.OpenAIJudge(key)
+
+    def run(number: int) -> triage_mod.TriageCard:
+        ctx = triage_mod.gather(
+            conn, settings.issues_dir, settings.targets_dir, repo, number
+        )
+        return triage_mod.triage(ctx, triager, judge)
+
+    return run
+
+
+@app.command()
+def triage(number: int, repo: str | None = None, json: bool = False) -> None:
+    """Triage card for one fetched and embedded issue (two LLM calls)."""
+    target = _target_repo(repo)
+    with postgres.connect(get_settings().postgres_dsn) as conn:
+        try:
+            card = _triage_fn(conn, target)(number)
+        except triage_mod.NotReady as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
+    if json:
+        typer.echo(card.model_dump_json(indent=2))
+    else:
+        _show_card(card)
+
+
+def _show_card(card: triage_mod.TriageCard) -> None:
+    i, d, r = card.issue, card.duplicate, card.run
+    typer.echo(f"{i.repo}#{i.number} ({i.state})  {i.url}")
+    typer.echo(f"  {card.summary}")
+    severity = f" / {card.severity}" if card.severity else ""
+    typer.echo(f"  type          {card.type}{severity}")
+    typer.echo(f"  component     {card.component or '-'}")
+    for n, step in enumerate(card.repro_steps, 1):
+        typer.echo(f"  {'repro' if n == 1 else '':<13} {n}. {step}")
+    for q in card.missing_info:
+        typer.echo(f"  {'missing':<13} {q}")
+    target = f" #{d.target}" if d.target else ""
+    typer.echo(f"  duplicate     {d.verdict}{target}")
+    if d.evidence:
+        typer.echo(f'  {"":<13} "{d.evidence}"')
+    related = ", ".join(f"#{x.number} {x.score:.2f}" for x in card.related_issues)
+    typer.echo(f"  related       {related or '-'}")
+    for doc in card.related_docs:
+        typer.echo(f"  {'docs':<13} {doc.score:.2f} {doc.source}")
+    for reason in card.dropped:
+        typer.echo(f"  dropped       {reason}")
+    typer.echo(
+        f"  run           ${r.cost_usd:.4f}, {r.latency_ms / 1000:.1f} s, {r.model}"
+    )
 
 
 @app.command()
@@ -394,4 +494,6 @@ def mcp() -> None:
     with postgres.connect(get_settings().postgres_dsn) as conn, _graph() as driver:
         # Read-only and long-lived: one transaction per query, none left open.
         conn.autocommit = True
-        build_mcp(embed, conn, driver).run("stdio")
+        target = get_settings().target_repo
+        run = _triage_fn(conn, check_repo(target)) if target else None
+        build_mcp(embed, conn, driver, run).run("stdio")

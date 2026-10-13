@@ -8,7 +8,7 @@ features (what does a change touch, which decisions constrain it). Formerly
 carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
 Roadmap: v1 triage (read-only) -> v2 repo map + planning mode (read-only) ->
-v3 autopilot -> v4 review. Current: v1 (step 1 of 4 done).
+v3 autopilot -> v4 review. Current: v1 (step 3 of 4 done).
 
 ## Commands
 
@@ -22,7 +22,10 @@ v3 autopilot -> v4 review. Current: v1 (step 1 of 4 done).
 - `uv run cofabriq graph` / `decisions [--project]` / `affected <repo:path>`: load `extracted.json` into Neo4j, query decisions in force and affected projects
 - `uv run cofabriq fetch-issues` / `embed-issues`: issues of `TARGET_REPO` into `data/issues/` (needs `GITHUB_TOKEN`, read-only), title + body into pgvector
 - `uv run cofabriq eval dedupe-set` / `eval dedupe`: freeze the duplicate eval set to `evals/` (once; `--force` rebuilds), print recall@k and the threshold baseline (strict and cluster)
-- `uv run cofabriq mcp`: serve `search`, `decisions`, `affected` as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
+- `uv run cofabriq triage <n> [--repo] [--json]`: triage card for a fetched and embedded issue (two LLM calls: card fields, duplicate verdict)
+- `uv run cofabriq eval triage --repo philippmossier/local-ai-chat-playground`: type, component, duplicate and injection checks on the seeded playground issues (paid, not cached)
+- `uv run python playground/playground.py seed` / `reset --yes`: seed or wipe-and-reseed the demo playground via `gh` (your login; the repo is hard-coded)
+- `uv run cofabriq mcp`: serve `search`, `decisions`, `affected` and (with `TARGET_REPO` set) `triage` as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
 
 ## Layout
 
@@ -32,8 +35,10 @@ v3 autopilot -> v4 review. Current: v1 (step 1 of 4 done).
   - `domain.py`: the ADR domain schema the LLM fills (third seam; replaced by the repo map in v2)
   - `ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed, extract (`Extractor` protocol)
   - `store/`: `postgres.py` (vectors), `graph.py` (Neo4j)
-- `src/cofabriq/issues/`: v1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest)
-- `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`)
+- `src/cofabriq/issues/`: v1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest), `verdict.py` (checked duplicate verdict), `triage.py` (the triage card schema, checks and assembly)
+- `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`, `triage.py`)
+- `targets/<owner>-<name>.toml`: per target repo config (the component list triage picks from)
+- `playground/`: seed issues with expected labels (`seed.toml`) and the seed/reset script for the demo repo
 - `evals/`: frozen eval sets (issue numbers only, committed)
 - `src/cofabriq/mcp_server.py`: MCP tools
 - `docs/adr/`: architecture decision records, written when the decision is made
