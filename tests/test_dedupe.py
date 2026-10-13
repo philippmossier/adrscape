@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from cofabriq.context.store import postgres
-from cofabriq.eval.dedupe import Ranked, build, score
+from cofabriq.eval.dedupe import Ranked, build, score, score_verdicts
 from cofabriq.issues import vectors
 from cofabriq.issues.model import Comment, Issue, IssueRef
 from tests.test_embed_store import FakeEmbedder
@@ -126,6 +126,34 @@ def test_cluster_recall_accepts_a_sibling() -> None:
     assert strict.recall_at == {1: 0.0, 5: 0.5}
     assert cluster.recall_at == {1: 0.5, 5: 0.5}
     assert cluster.best.precision == 1.0
+
+
+def test_score_verdicts_counts_only_duplicate_of() -> None:
+    ranked = [
+        Ranked(10, 1, [(1, 0.9)]),  # right target
+        Ranked(11, 2, [(7, 0.8)], frozenset({7})),  # names a sibling
+        Ranked(12, 4, [(5, 0.6)]),  # says related: no prediction
+        Ranked(20, None, [(6, 0.85)]),  # negative called a duplicate
+    ]
+    verdicts = {
+        10: ("duplicate_of", 1),
+        11: ("duplicate_of", 7),
+        12: ("related", 5),
+        20: ("duplicate_of", 6),
+    }
+
+    strict = score_verdicts(ranked, verdicts)
+    cluster = score_verdicts(ranked, verdicts, cluster=True)
+
+    assert (strict.predicted, strict.precision, strict.recall) == (
+        3,
+        pytest.approx(1 / 3),
+        pytest.approx(1 / 3),
+    )
+    assert (cluster.precision, cluster.recall) == (
+        pytest.approx(2 / 3),
+        pytest.approx(2 / 3),
+    )
 
 
 def test_issue_vectors_skip_unchanged_and_cut_by_time(conn: postgres.Conn) -> None:

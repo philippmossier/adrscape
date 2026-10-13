@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from statistics import fmean, median
 
 import psycopg
 import typer
@@ -21,15 +22,17 @@ from cofabriq.context.store import graph as kg
 from cofabriq.context.store import postgres
 from cofabriq.eval import dedupe
 from cofabriq.issues import vectors
+from cofabriq.issues import verdict as verdict_mod
 from cofabriq.issues.fetch import fetch_issues, load_issues
 from cofabriq.issues.github import GitHubIssueSource
-from cofabriq.issues.model import check_repo
+from cofabriq.issues.model import Issue, check_repo
 from cofabriq.mcp_server import build as build_mcp
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Measure retrieval and verdicts.")
 app.add_typer(eval_app, name="eval")
 EVALS_DIR = Path("evals")
+CANDIDATE_ISSUES = 10  # vector top-k the verdict chooses from
 
 
 @app.callback()
@@ -164,16 +167,21 @@ def dedupe_set(repo: str | None = None, force: bool = False) -> None:
 
 
 @eval_app.command("dedupe")
-def eval_dedupe(repo: str | None = None) -> None:
-    """Retrieval recall@k and the embedding-threshold baseline on the frozen set."""
+def eval_dedupe(repo: str | None = None, verdict: bool = False) -> None:
+    """Retrieval recall@k and the embedding-threshold baseline on the frozen set.
+
+    `--verdict` adds the LLM duplicate verdict over the top 10 (paid calls,
+    cached in the verdicts dir: a rerun costs nothing).
+    """
+    settings = get_settings()
     target = _target_repo(repo)
     evalset = dedupe.EvalSet.model_validate_json(_evalset_path(target).read_bytes())
-    issues = load_issues(get_settings().issues_dir, target)
-    created = {i.number: i.created_at for i in issues}
-    with postgres.connect(get_settings().postgres_dsn) as conn:
+    issues = {i.number: i for i in load_issues(settings.issues_dir, target)}
+    with postgres.connect(settings.postgres_dsn) as conn:
 
         def rank(number: int) -> list[tuple[int, float]]:
-            hits = vectors.nearest(conn, target, number, 10, created[number])
+            before = issues[number].created_at
+            hits = vectors.nearest(conn, target, number, CANDIDATE_ISSUES, before)
             return [(h.number, h.score) for h in hits]
 
         ranked = dedupe.rank_all(evalset, rank)
@@ -181,6 +189,7 @@ def eval_dedupe(repo: str | None = None) -> None:
         f"{target}, frozen {evalset.frozen_at:%Y-%m-%d}: "
         f"{len(evalset.pairs)} pairs, {len(evalset.negatives)} negatives"
     )
+    records = _verdicts(target, ranked, issues) if verdict else None
     for name, cluster in [("strict", False), ("cluster", True)]:
         m = dedupe.score(ranked, cluster=cluster)
         recall = "  ".join(f"@{k} {r:.3f}" for k, r in m.recall_at.items())
@@ -189,6 +198,42 @@ def eval_dedupe(repo: str | None = None) -> None:
             f"  {name:<8} recall {recall}  |  threshold baseline t={b.value:.3f}: "
             f"precision {b.precision:.3f}, recall {b.recall:.3f}, F1 {b.f1:.3f}"
         )
+        if records is not None:
+            answers = {n: (r.verdict, r.target) for n, r in records.items()}
+            v = dedupe.score_verdicts(ranked, answers, cluster=cluster)
+            typer.echo(
+                f"  {'':<8} LLM verdict ({v.predicted} duplicate_of): "
+                f"precision {v.precision:.3f}, recall {v.recall:.3f}, F1 {v.f1:.3f}"
+            )
+    if records is not None:
+        rows = list(records.values())
+        dropped = sum(bool(r.dropped) for r in rows)
+        typer.echo(
+            f"  per issue: ${fmean(r.cost_usd for r in rows):.5f} mean, "
+            f"{median(r.latency_ms for r in rows) / 1000:.1f} s median latency; "
+            f"{dropped} of {len(rows)} verdicts failed the check"
+        )
+
+
+def _verdicts(
+    repo: str, ranked: list[dedupe.Ranked], issues: dict[int, Issue]
+) -> dict[int, verdict_mod.VerdictRecord]:
+    """The checked LLM verdict for every eval issue, cached per candidate list."""
+    jobs = [
+        verdict_mod.Job(
+            query=issues[r.query],
+            candidates=[
+                verdict_mod.Candidate.of(issues[n], issues[r.query])
+                for n, _ in r.candidates
+            ],
+        )
+        for r in ranked
+    ]
+    path = get_settings().verdicts_dir / f"{repo.replace('/', '-')}.json"
+    judge = verdict_mod.OpenAIJudge(_openai_key())
+    records, report = verdict_mod.judge_all(jobs, path, judge)
+    typer.echo(f"  verdicts: {report.judged} judged, {report.cached} cached -> {path}")
+    return records
 
 
 @app.command()

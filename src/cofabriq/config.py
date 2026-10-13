@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     extracted_path: Path = Path("data/extracted.json")
     openai_api_key: SecretStr | None = None
     issues_dir: Path = Path("data/issues")
+    verdicts_dir: Path = Path("data/verdicts")
     target_repo: str | None = None
     github_token: SecretStr | None = None
     issue_comments: int = 10

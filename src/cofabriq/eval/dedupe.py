@@ -2,7 +2,7 @@
 
 import random
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
@@ -213,3 +213,36 @@ def _in_top(r: Ranked, k: int, cluster: bool) -> bool:
 
 def _share(rows: Sequence[Ranked], hit: Callable[[Ranked], bool]) -> float:
     return sum(hit(r) for r in rows) / len(rows) if rows else 0.0
+
+
+@dataclass(frozen=True)
+class VerdictScore:
+    predicted: int  # `duplicate_of` verdicts, over positives and negatives
+    precision: float
+    recall: float
+    f1: float
+
+
+def score_verdicts(
+    ranked: Sequence[Ranked],
+    verdicts: Mapping[int, tuple[str, int | None]],
+    cluster: bool = False,
+) -> VerdictScore:
+    """Precision and recall of `duplicate_of`, comparable to the threshold
+    baseline: a prediction is right only on a positive whose named target is
+    the label (or, with `cluster=True`, one of its siblings). `related` and
+    `none` count as no prediction. `verdicts` maps query number to
+    (verdict, target).
+    """
+    positives = sum(r.target is not None for r in ranked)
+    predicted = tp = 0
+    for r in ranked:
+        verdict, target = verdicts[r.query]
+        if verdict != "duplicate_of" or target is None:
+            continue
+        predicted += 1
+        tp += r.target is not None and r.is_hit(target, cluster)
+    precision = tp / predicted if predicted else 0.0
+    recall = tp / positives if positives else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if tp else 0.0
+    return VerdictScore(predicted, precision, recall, f1)
