@@ -16,6 +16,7 @@ from adrscape.ingest.extract import sync as extract_sync
 from adrscape.ingest.fetch import fetch as fetch_source
 from adrscape.ingest.parse import load_docs
 from adrscape.ingest.source import LocalGitSource, Source
+from adrscape.mcp_server import build as build_mcp
 from adrscape.store import graph as kg
 from adrscape.store import postgres
 
@@ -240,3 +241,13 @@ def affected(adr: str) -> None:
     for a in found:
         how = "named" if a.hops == 0 else f"{a.hops} hop{'s' * (a.hops > 1)}"
         typer.echo(f"{how:<8} {a.project}")
+
+
+@app.command()
+def mcp() -> None:
+    """Serve search and the graph queries as MCP tools over stdio."""
+    embed = _embedder()
+    with postgres.connect(get_settings().postgres_dsn) as conn, _graph() as driver:
+        # Read-only and long-lived: one transaction per query, none left open.
+        conn.autocommit = True
+        build_mcp(embed, conn, driver).run("stdio")

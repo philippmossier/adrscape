@@ -1,14 +1,10 @@
 import re
-import uuid
 import zlib
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 
-import psycopg
 import pytest
-from psycopg import sql
 
-from adrscape.config import get_settings
 from adrscape.ingest.chunk import Chunk
 from adrscape.ingest.embed import DIM, embed_input
 from adrscape.ingest.source import DocKind
@@ -44,26 +40,6 @@ def chunk(path: str, text: str, sha: str = "aaa", ord: int = 0) -> Chunk:
         text=text,
         meta={"status": "Accepted"},
     )
-
-
-@pytest.fixture
-def conn() -> Iterator[postgres.Conn]:
-    """A connection whose tables live in a throwaway schema."""
-    schema = f"test_{uuid.uuid4().hex[:8]}"
-    ident = sql.Identifier(schema)
-    dsn = get_settings().postgres_dsn
-    try:
-        admin = psycopg.connect(dsn, connect_timeout=2, autocommit=True)
-    except psycopg.OperationalError:
-        pytest.skip("Postgres not reachable (make up)")
-    with admin:
-        admin.execute(sql.SQL("CREATE SCHEMA {}").format(ident))
-        scoped = f"{dsn}?options=-csearch_path%3D{schema},public"
-        try:
-            with postgres.connect(scoped) as c:
-                yield c
-        finally:
-            admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(ident))
 
 
 def test_embed_input_puts_the_heading_trail_first() -> None:

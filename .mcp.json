@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "adrscape": {
+      "command": "uv",
+      "args": ["run", "--quiet", "adrscape", "mcp"]
+    }
+  }
+}

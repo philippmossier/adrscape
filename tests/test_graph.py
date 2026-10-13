@@ -1,32 +1,12 @@
-from collections.abc import Iterator
 from typing import LiteralString
 
-import pytest
 from neo4j import Driver
-from neo4j.exceptions import ServiceUnavailable
 
-from adrscape.config import get_settings
 from adrscape.domain import AdrStatus, Extraction, Link
 from adrscape.ingest.extract import VERSION, ExtractedDoc
 from adrscape.ingest.parse import MarkdownParser, ParsedDoc
 from adrscape.ingest.source import DocKind, DocRef
 from adrscape.store import graph
-
-# The throwaway instance from compose (`neo4j-test`), never the dev graph.
-TEST_URI = "bolt://localhost:7688"
-
-
-@pytest.fixture
-def driver() -> Iterator[Driver]:
-    settings = get_settings()
-    password = settings.neo4j_password.get_secret_value()
-    try:
-        d = graph.connect(TEST_URI, settings.neo4j_user, password)
-    except ServiceUnavailable:
-        pytest.skip("Neo4j test instance not reachable (make up)")
-    with d:
-        d.execute_query("MATCH (n) DETACH DELETE n")
-        yield d
 
 
 def adr(

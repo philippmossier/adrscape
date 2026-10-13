@@ -15,6 +15,7 @@ layer come later (see README roadmap).
 - `uv run adrscape fetch <repo>...` / `embed` / `search "..."`: ingest local clones into `data/raw/`, embed into pgvector (needs `OPENAI_API_KEY`), query
 - `uv run adrscape extract`: LLM fills the domain schema per document into `data/extracted.json` (needs `embed` first; unchanged docs skipped)
 - `uv run adrscape graph` / `decisions [--project]` / `affected <repo:path>`: load `extracted.json` into Neo4j, query decisions in force and affected projects
+- `uv run adrscape mcp`: serve `search`, `decisions`, `affected` as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
 
 ## Layout
 

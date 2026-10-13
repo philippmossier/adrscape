@@ -75,10 +75,7 @@ class Decision:
     revised_by: list[str]  # accepted ADRs that revise this one
     revisits: list[str]  # earlier ADRs deciding the same question elsewhere
     revisited_by: list[str]
-
-    @property
-    def in_force(self) -> bool:
-        return self.status not in NOT_IN_FORCE and not self.revised_by
+    in_force: bool  # status allows it and no accepted ADR revises it
 
 
 @dataclass(frozen=True)
@@ -180,7 +177,13 @@ def decisions(driver: Driver, project: str | None = None) -> list[Decision]:
         project=project,
         not_in_force=NOT_IN_FORCE,
     )
-    return [Decision(**r.data()) for r in records]
+    return [
+        Decision(
+            **r.data(),
+            in_force=r["status"] not in NOT_IN_FORCE and not r["revised_by"],
+        )
+        for r in records
+    ]
 
 
 def affected(driver: Driver, adr: str) -> list[Affected]:
