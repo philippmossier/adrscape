@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     raw_dir: Path = Path("data/raw")
     extracted_path: Path = Path("data/extracted.json")
     openai_api_key: SecretStr | None = None
+    issues_dir: Path = Path("data/issues")
+    target_repo: str | None = None
+    github_token: SecretStr | None = None
+    issue_comments: int = 10
 
 
 @lru_cache

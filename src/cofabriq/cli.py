@@ -1,6 +1,7 @@
 """Command-line entry point (`cofabriq ...`)."""
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import psycopg
@@ -18,9 +19,17 @@ from cofabriq.context.ingest.parse import load_docs
 from cofabriq.context.ingest.source import LocalGitSource, Source
 from cofabriq.context.store import graph as kg
 from cofabriq.context.store import postgres
+from cofabriq.eval import dedupe
+from cofabriq.issues import vectors
+from cofabriq.issues.fetch import fetch_issues, load_issues
+from cofabriq.issues.github import GitHubIssueSource
+from cofabriq.issues.model import check_repo
 from cofabriq.mcp_server import build as build_mcp
 
 app = typer.Typer(no_args_is_help=True)
+eval_app = typer.Typer(no_args_is_help=True, help="Measure retrieval and verdicts.")
+app.add_typer(eval_app, name="eval")
+EVALS_DIR = Path("evals")
 
 
 @app.callback()
@@ -90,6 +99,96 @@ def fetch(repos: list[Path]) -> None:
         f"{report.written} written, {report.unchanged} unchanged, "
         f"{report.removed} removed -> {raw_dir}"
     )
+
+
+def _target_repo(repo: str | None) -> str:
+    target = repo or get_settings().target_repo
+    if target is None:
+        typer.echo("pass --repo or set TARGET_REPO (.env.example)", err=True)
+        raise typer.Exit(code=1)
+    return check_repo(target)
+
+
+@app.command("fetch-issues")
+def fetch_issues_cmd(repo: str | None = None) -> None:
+    """Copy a GitHub repo's issues into the issues dir, only what changed."""
+    settings = get_settings()
+    target = _target_repo(repo)
+    if settings.github_token is None:
+        typer.echo("GITHUB_TOKEN is not set (.env.example)", err=True)
+        raise typer.Exit(code=1)
+    source = GitHubIssueSource(
+        target,
+        settings.github_token.get_secret_value(),
+        comments=settings.issue_comments,
+    )
+    report = fetch_issues(source, settings.issues_dir)
+    since = report.since.isoformat() if report.since else "the start"
+    typer.echo(
+        f"{report.written} written, {report.unchanged} unchanged "
+        f"(updated since {since}) -> {settings.issues_dir}"
+    )
+
+
+@app.command("embed-issues")
+def embed_issues(repo: str | None = None) -> None:
+    """Embed fetched issues (title + body) into Postgres; skip unchanged ones."""
+    settings = get_settings()
+    issues = load_issues(settings.issues_dir, _target_repo(repo))
+    with postgres.connect(settings.postgres_dsn) as conn:
+        report = vectors.sync(conn, issues, _embedder())
+    typer.echo(f"{report.embedded} issues embedded, {report.unchanged} unchanged")
+
+
+def _evalset_path(repo: str) -> Path:
+    return EVALS_DIR / f"dedupe-{repo.replace('/', '-')}.json"
+
+
+@eval_app.command("dedupe-set")
+def dedupe_set(repo: str | None = None, force: bool = False) -> None:
+    """Build and freeze the duplicate eval set from the fetched issues."""
+    target = _target_repo(repo)
+    path = _evalset_path(target)
+    if path.exists() and not force:
+        typer.echo(f"{path} is frozen; --force to rebuild it", err=True)
+        raise typer.Exit(code=1)
+    issues = load_issues(get_settings().issues_dir, target)
+    evalset, report = dedupe.build(issues, frozen_at=datetime.now(UTC))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(evalset.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    typer.echo(
+        f"{report.pairs} pairs ({report.by_signal}), {len(evalset.negatives)} "
+        f"negatives from {len(issues)} issues; dropped {report.ambiguous} "
+        f"ambiguous, {report.unusable} unusable -> {path}"
+    )
+
+
+@eval_app.command("dedupe")
+def eval_dedupe(repo: str | None = None) -> None:
+    """Retrieval recall@k and the embedding-threshold baseline on the frozen set."""
+    target = _target_repo(repo)
+    evalset = dedupe.EvalSet.model_validate_json(_evalset_path(target).read_bytes())
+    issues = load_issues(get_settings().issues_dir, target)
+    created = {i.number: i.created_at for i in issues}
+    with postgres.connect(get_settings().postgres_dsn) as conn:
+
+        def rank(number: int) -> list[tuple[int, float]]:
+            hits = vectors.nearest(conn, target, number, 10, created[number])
+            return [(h.number, h.score) for h in hits]
+
+        ranked = dedupe.rank_all(evalset, rank)
+    typer.echo(
+        f"{target}, frozen {evalset.frozen_at:%Y-%m-%d}: "
+        f"{len(evalset.pairs)} pairs, {len(evalset.negatives)} negatives"
+    )
+    for name, cluster in [("strict", False), ("cluster", True)]:
+        m = dedupe.score(ranked, cluster=cluster)
+        recall = "  ".join(f"@{k} {r:.3f}" for k, r in m.recall_at.items())
+        b = m.best
+        typer.echo(
+            f"  {name:<8} recall {recall}  |  threshold baseline t={b.value:.3f}: "
+            f"precision {b.precision:.3f}, recall {b.recall:.3f}, F1 {b.f1:.3f}"
+        )
 
 
 @app.command()

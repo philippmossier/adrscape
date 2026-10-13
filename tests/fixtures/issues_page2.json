@@ -1,0 +1,109 @@
+{
+  "data": {
+    "rateLimit": {
+      "cost": 1,
+      "remaining": 4985,
+      "resetAt": "2026-10-13T10:20:17Z"
+    },
+    "repository": {
+      "issues": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOC0zMVQxMjoyNDoyN1rO6jWlZg=="
+        },
+        "nodes": [
+          {
+            "number": 29291,
+            "title": "issue: Migration fails (0.11.0 -> 0.11.2)",
+            "body": "### Before Submitting\n\n- [x] I searched open and closed issues and discussions for an existing report.\n- [x] I checked whether this is already fixed on the `dev` branch or latest source.\n- [x] I understand that maintainers want a well-written issue before any code pull request.\n- [x] I am using the ",
+            "state": "CLOSED",
+            "stateReason": "DUPLICATE",
+            "createdAt": "2026-08-31T09:10:54Z",
+            "updatedAt": "2026-08-31T09:26:02Z",
+            "closedAt": "2026-08-31T09:17:20Z",
+            "author": {
+              "__typename": "User",
+              "login": "ccdv-ai"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "name": "bug"
+                }
+              ]
+            },
+            "comments": {
+              "totalCount": 3,
+              "nodes": [
+                {
+                  "author": {
+                    "__typename": "Bot",
+                    "login": "owui-terminator"
+                  },
+                  "body": "<!-- terminator-bot:related-issues-reply -->\n🔍 **Related Issues Found**\n\nI found some existing issues that might be related. Please check if any of these are duplicates or contain helpful solutions:\n\n1. 🟢 [#29290](https://github.com/open-webui/open-webui/issues/29290) **issue: DB migration failed**\n",
+                  "createdAt": "2026-08-31T09:11:06Z"
+                },
+                {
+                  "author": {
+                    "__typename": "User",
+                    "login": "Classic298"
+                  },
+                  "body": "https://github.com/open-webui/open-webui/issues/29290",
+                  "createdAt": "2026-08-31T09:17:20Z"
+                }
+              ]
+            },
+            "timelineItems": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 21315,
+            "title": "issue: Title: [BUG/FIX] IndexError in save_docs_to_vector_db and lack of retry logic for embedding generation",
+            "body": "### Check Existing Issues\n\n- [x] I have searched for any existing and/or related issues.\n- [x] I have searched for any existing and/or related discussions.\n- [x] I have also searched in the CLOSED issues AND CLOSED discussions and found no related items (your issue might already be addressed on the ",
+            "state": "CLOSED",
+            "stateReason": "NOT_PLANNED",
+            "createdAt": "2026-02-12T01:21:19Z",
+            "updatedAt": "2026-08-31T12:24:27Z",
+            "closedAt": "2026-02-12T21:38:12Z",
+            "author": {
+              "__typename": "User",
+              "login": "DaMccRee"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "name": "bug"
+                }
+              ]
+            },
+            "comments": {
+              "totalCount": 3,
+              "nodes": [
+                {
+                  "author": {
+                    "__typename": "User",
+                    "login": "DaMccRee"
+                  },
+                  "body": "## Technical Deep Dive & Validation (Supplemental)\n\n### Root Cause Analysis\nThe `IndexError` is a secondary symptom. The primary cause is that `get_embedding_function` (in `retrieval/utils.py`) processes embeddings in batches. Currently, if any batch fails (e.g., Ollama returning 503 during model lo",
+                  "createdAt": "2026-02-12T01:41:03Z"
+                },
+                {
+                  "author": {
+                    "__typename": "User",
+                    "login": "DaMccRee"
+                  },
+                  "body": "Ok\r\n发自我的 iPhone\r\n\r\n在 2026年2月13日，上午5:38，Tim Baek ***@***.***> 写道：\r\n\r\n﻿\r\n\r\nClosed #21315<https://github.com/open-webui/open-webui/issues/21315> as not planned.\r\n\r\n—\r\nReply to this email directly, view it on GitHub<https://github.com/open-webui/open-webui/issues/21315#event-22748772503>, or unsubscribe",
+                  "createdAt": "2026-02-13T03:59:18Z"
+                }
+              ]
+            },
+            "timelineItems": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

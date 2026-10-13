@@ -1,0 +1,1341 @@
+{
+  "repo": "open-webui/open-webui",
+  "frozen_at": "2026-10-13T11:22:01.358032Z",
+  "issues": 10302,
+  "pairs": [
+    {
+      "query": 60,
+      "target": 31,
+      "signal": "comment",
+      "siblings": [
+        117,
+        233,
+        238
+      ]
+    },
+    {
+      "query": 117,
+      "target": 31,
+      "signal": "comment",
+      "siblings": [
+        60,
+        233,
+        238
+      ]
+    },
+    {
+      "query": 140,
+      "target": 128,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 146,
+      "target": 68,
+      "signal": "comment",
+      "siblings": [
+        210,
+        218
+      ]
+    },
+    {
+      "query": 210,
+      "target": 68,
+      "signal": "comment",
+      "siblings": [
+        146,
+        218
+      ]
+    },
+    {
+      "query": 218,
+      "target": 68,
+      "signal": "comment",
+      "siblings": [
+        146,
+        210
+      ]
+    },
+    {
+      "query": 233,
+      "target": 31,
+      "signal": "comment",
+      "siblings": [
+        60,
+        117,
+        238
+      ]
+    },
+    {
+      "query": 238,
+      "target": 31,
+      "signal": "comment",
+      "siblings": [
+        60,
+        117,
+        233
+      ]
+    },
+    {
+      "query": 258,
+      "target": 230,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 288,
+      "target": 269,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 515,
+      "target": 259,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 7386,
+      "target": 7375,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 8354,
+      "target": 3097,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 9037,
+      "target": 9030,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 9632,
+      "target": 9452,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 11788,
+      "target": 6973,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 12204,
+      "target": 7679,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 12659,
+      "target": 12658,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 13723,
+      "target": 13547,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 14821,
+      "target": 14807,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 15616,
+      "target": 9317,
+      "signal": "mark",
+      "siblings": [
+        18201
+      ]
+    },
+    {
+      "query": 15732,
+      "target": 12228,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 16908,
+      "target": 16784,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 16985,
+      "target": 13464,
+      "signal": "mark",
+      "siblings": [
+        18885,
+        23716
+      ]
+    },
+    {
+      "query": 17134,
+      "target": 17088,
+      "signal": "mark",
+      "siblings": [
+        18485
+      ]
+    },
+    {
+      "query": 17922,
+      "target": 17901,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 18003,
+      "target": 17899,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 18155,
+      "target": 18133,
+      "signal": "comment",
+      "siblings": [
+        18158
+      ]
+    },
+    {
+      "query": 18158,
+      "target": 18133,
+      "signal": "mark",
+      "siblings": [
+        18155
+      ]
+    },
+    {
+      "query": 18201,
+      "target": 15616,
+      "signal": "mark",
+      "siblings": [
+        9317
+      ]
+    },
+    {
+      "query": 18377,
+      "target": 18327,
+      "signal": "comment",
+      "siblings": [
+        18643
+      ]
+    },
+    {
+      "query": 18380,
+      "target": 6692,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 18418,
+      "target": 18417,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 18485,
+      "target": 17088,
+      "signal": "mark",
+      "siblings": [
+        17134
+      ]
+    },
+    {
+      "query": 18643,
+      "target": 18327,
+      "signal": "comment",
+      "siblings": [
+        18377
+      ]
+    },
+    {
+      "query": 18671,
+      "target": 16935,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 18885,
+      "target": 13464,
+      "signal": "mark",
+      "siblings": [
+        16985,
+        23716
+      ]
+    },
+    {
+      "query": 18975,
+      "target": 18973,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 19423,
+      "target": 19421,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 19433,
+      "target": 19424,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 19532,
+      "target": 19518,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 19563,
+      "target": 19562,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 19649,
+      "target": 17846,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 19873,
+      "target": 13424,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 20003,
+      "target": 15134,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 20118,
+      "target": 14596,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 20161,
+      "target": 5840,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 20474,
+      "target": 19225,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 20848,
+      "target": 20543,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 21354,
+      "target": 21348,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 21422,
+      "target": 21349,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 21581,
+      "target": 8050,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 21864,
+      "target": 21818,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 22201,
+      "target": 21566,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 22298,
+      "target": 12459,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 22664,
+      "target": 22616,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 22949,
+      "target": 22948,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 23182,
+      "target": 12087,
+      "signal": "mark",
+      "siblings": [
+        26228
+      ]
+    },
+    {
+      "query": 23341,
+      "target": 21675,
+      "signal": "mark",
+      "siblings": [
+        23926,
+        28059,
+        28084,
+        28230,
+        28586
+      ]
+    },
+    {
+      "query": 23422,
+      "target": 21564,
+      "signal": "mark",
+      "siblings": [
+        23496,
+        24417
+      ]
+    },
+    {
+      "query": 23496,
+      "target": 21564,
+      "signal": "mark",
+      "siblings": [
+        23422,
+        24417
+      ]
+    },
+    {
+      "query": 23716,
+      "target": 13464,
+      "signal": "mark",
+      "siblings": [
+        16985,
+        18885
+      ]
+    },
+    {
+      "query": 23926,
+      "target": 21675,
+      "signal": "comment",
+      "siblings": [
+        23341,
+        28059,
+        28084,
+        28230,
+        28586
+      ]
+    },
+    {
+      "query": 24337,
+      "target": 24169,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 24417,
+      "target": 21564,
+      "signal": "mark",
+      "siblings": [
+        23422,
+        23496
+      ]
+    },
+    {
+      "query": 24554,
+      "target": 24553,
+      "signal": "mark",
+      "siblings": [
+        24564,
+        24575,
+        24603,
+        24639
+      ]
+    },
+    {
+      "query": 24564,
+      "target": 24553,
+      "signal": "comment",
+      "siblings": [
+        24554,
+        24575,
+        24603,
+        24639
+      ]
+    },
+    {
+      "query": 24575,
+      "target": 24564,
+      "signal": "mark",
+      "siblings": [
+        24553,
+        24554,
+        24603,
+        24639
+      ]
+    },
+    {
+      "query": 24603,
+      "target": 24553,
+      "signal": "mark",
+      "siblings": [
+        24554,
+        24564,
+        24575,
+        24639
+      ]
+    },
+    {
+      "query": 24630,
+      "target": 24560,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 24639,
+      "target": 24553,
+      "signal": "mark",
+      "siblings": [
+        24554,
+        24564,
+        24575,
+        24603
+      ]
+    },
+    {
+      "query": 24646,
+      "target": 24079,
+      "signal": "mark",
+      "siblings": [
+        24909,
+        29065,
+        29066,
+        29068
+      ]
+    },
+    {
+      "query": 24647,
+      "target": 23948,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 24702,
+      "target": 24557,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 24749,
+      "target": 24550,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 24909,
+      "target": 24079,
+      "signal": "mark",
+      "siblings": [
+        24646,
+        29065,
+        29066,
+        29068
+      ]
+    },
+    {
+      "query": 25236,
+      "target": 25186,
+      "signal": "comment",
+      "siblings": [
+        25241
+      ]
+    },
+    {
+      "query": 25241,
+      "target": 25186,
+      "signal": "comment",
+      "siblings": [
+        25236
+      ]
+    },
+    {
+      "query": 25618,
+      "target": 25585,
+      "signal": "mark",
+      "siblings": [
+        25908,
+        26119,
+        28012
+      ]
+    },
+    {
+      "query": 25878,
+      "target": 25732,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 25908,
+      "target": 25585,
+      "signal": "mark",
+      "siblings": [
+        25618,
+        26119,
+        28012
+      ]
+    },
+    {
+      "query": 26119,
+      "target": 25585,
+      "signal": "mark",
+      "siblings": [
+        25618,
+        25908,
+        28012
+      ]
+    },
+    {
+      "query": 26143,
+      "target": 17858,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 26150,
+      "target": 23168,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 26198,
+      "target": 24393,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 26228,
+      "target": 12087,
+      "signal": "mark",
+      "siblings": [
+        23182
+      ]
+    },
+    {
+      "query": 26330,
+      "target": 26139,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 26402,
+      "target": 26389,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 26407,
+      "target": 26401,
+      "signal": "mark",
+      "siblings": [
+        27309
+      ]
+    },
+    {
+      "query": 26414,
+      "target": 26412,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 26636,
+      "target": 26420,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 26707,
+      "target": 26656,
+      "signal": "mark",
+      "siblings": [
+        26960
+      ]
+    },
+    {
+      "query": 26746,
+      "target": 25617,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 26960,
+      "target": 26656,
+      "signal": "mark",
+      "siblings": [
+        26707
+      ]
+    },
+    {
+      "query": 27052,
+      "target": 26651,
+      "signal": "comment",
+      "siblings": [
+        29091
+      ]
+    },
+    {
+      "query": 27151,
+      "target": 23988,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 27309,
+      "target": 26407,
+      "signal": "comment",
+      "siblings": [
+        26401
+      ]
+    },
+    {
+      "query": 27401,
+      "target": 21341,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 27433,
+      "target": 26677,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 27687,
+      "target": 27622,
+      "signal": "mark",
+      "siblings": [
+        27745,
+        27782,
+        28626
+      ]
+    },
+    {
+      "query": 27719,
+      "target": 27621,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 27745,
+      "target": 27622,
+      "signal": "mark",
+      "siblings": [
+        27687,
+        27782,
+        28626
+      ]
+    },
+    {
+      "query": 27749,
+      "target": 27647,
+      "signal": "mark",
+      "siblings": [
+        28038
+      ]
+    },
+    {
+      "query": 27782,
+      "target": 27622,
+      "signal": "mark",
+      "siblings": [
+        27687,
+        27745,
+        28626
+      ]
+    },
+    {
+      "query": 27791,
+      "target": 27688,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 28012,
+      "target": 25585,
+      "signal": "mark",
+      "siblings": [
+        25618,
+        25908,
+        26119
+      ]
+    },
+    {
+      "query": 28038,
+      "target": 27647,
+      "signal": "mark",
+      "siblings": [
+        27749
+      ]
+    },
+    {
+      "query": 28059,
+      "target": 21675,
+      "signal": "mark",
+      "siblings": [
+        23341,
+        23926,
+        28084,
+        28230,
+        28586
+      ]
+    },
+    {
+      "query": 28084,
+      "target": 21675,
+      "signal": "mark",
+      "siblings": [
+        23341,
+        23926,
+        28059,
+        28230,
+        28586
+      ]
+    },
+    {
+      "query": 28207,
+      "target": 19313,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 28215,
+      "target": 28013,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 28230,
+      "target": 21675,
+      "signal": "mark",
+      "siblings": [
+        23341,
+        23926,
+        28059,
+        28084,
+        28586
+      ]
+    },
+    {
+      "query": 28525,
+      "target": 27604,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 28570,
+      "target": 28305,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 28586,
+      "target": 21675,
+      "signal": "mark",
+      "siblings": [
+        23341,
+        23926,
+        28059,
+        28084,
+        28230
+      ]
+    },
+    {
+      "query": 28626,
+      "target": 27622,
+      "signal": "comment",
+      "siblings": [
+        27687,
+        27745,
+        27782
+      ]
+    },
+    {
+      "query": 28678,
+      "target": 27641,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 28738,
+      "target": 27602,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 28825,
+      "target": 27684,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 29061,
+      "target": 27598,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 29065,
+      "target": 24079,
+      "signal": "mark",
+      "siblings": [
+        24646,
+        24909,
+        29066,
+        29068
+      ]
+    },
+    {
+      "query": 29066,
+      "target": 24079,
+      "signal": "mark",
+      "siblings": [
+        24646,
+        24909,
+        29065,
+        29068
+      ]
+    },
+    {
+      "query": 29068,
+      "target": 24079,
+      "signal": "mark",
+      "siblings": [
+        24646,
+        24909,
+        29065,
+        29066
+      ]
+    },
+    {
+      "query": 29086,
+      "target": 2790,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 29090,
+      "target": 29050,
+      "signal": "mark",
+      "siblings": [
+        29326
+      ]
+    },
+    {
+      "query": 29091,
+      "target": 26651,
+      "signal": "comment",
+      "siblings": [
+        27052
+      ]
+    },
+    {
+      "query": 29092,
+      "target": 23973,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 29095,
+      "target": 29036,
+      "signal": "comment",
+      "siblings": [
+        29193
+      ]
+    },
+    {
+      "query": 29163,
+      "target": 29040,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 29193,
+      "target": 29036,
+      "signal": "mark",
+      "siblings": [
+        29095
+      ]
+    },
+    {
+      "query": 29290,
+      "target": 29280,
+      "signal": "mark",
+      "siblings": [
+        29291,
+        29292,
+        29298,
+        29300
+      ]
+    },
+    {
+      "query": 29291,
+      "target": 29290,
+      "signal": "mark",
+      "siblings": [
+        29280,
+        29292,
+        29298,
+        29300
+      ]
+    },
+    {
+      "query": 29292,
+      "target": 29280,
+      "signal": "mark",
+      "siblings": [
+        29290,
+        29291,
+        29298,
+        29300
+      ]
+    },
+    {
+      "query": 29298,
+      "target": 29280,
+      "signal": "mark",
+      "siblings": [
+        29290,
+        29291,
+        29292,
+        29300
+      ]
+    },
+    {
+      "query": 29300,
+      "target": 29280,
+      "signal": "mark",
+      "siblings": [
+        29290,
+        29291,
+        29292,
+        29298
+      ]
+    },
+    {
+      "query": 29326,
+      "target": 29090,
+      "signal": "comment",
+      "siblings": [
+        29050
+      ]
+    },
+    {
+      "query": 29489,
+      "target": 27987,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 29583,
+      "target": 25106,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 29587,
+      "target": 29074,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 29628,
+      "target": 24559,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 29716,
+      "target": 18287,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 29822,
+      "target": 20639,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 29872,
+      "target": 27599,
+      "signal": "mark",
+      "siblings": [
+        30268
+      ]
+    },
+    {
+      "query": 29880,
+      "target": 24074,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 29914,
+      "target": 29808,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 30268,
+      "target": 27599,
+      "signal": "comment",
+      "siblings": [
+        29872
+      ]
+    },
+    {
+      "query": 30422,
+      "target": 5894,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 31344,
+      "target": 30339,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 31389,
+      "target": 26812,
+      "signal": "mark",
+      "siblings": [
+        31909,
+        32048
+      ]
+    },
+    {
+      "query": 31909,
+      "target": 26812,
+      "signal": "mark",
+      "siblings": [
+        31389,
+        32048
+      ]
+    },
+    {
+      "query": 31929,
+      "target": 30318,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 31930,
+      "target": 9958,
+      "signal": "comment",
+      "siblings": []
+    },
+    {
+      "query": 31984,
+      "target": 30007,
+      "signal": "mark",
+      "siblings": []
+    },
+    {
+      "query": 32048,
+      "target": 26812,
+      "signal": "comment",
+      "siblings": [
+        31389,
+        31909
+      ]
+    },
+    {
+      "query": 32236,
+      "target": 32084,
+      "signal": "comment",
+      "siblings": []
+    }
+  ],
+  "negatives": [
+    55,
+    619,
+    690,
+    959,
+    999,
+    1132,
+    1341,
+    1473,
+    1550,
+    1645,
+    1852,
+    2520,
+    2568,
+    2581,
+    2616,
+    2872,
+    3077,
+    3096,
+    3347,
+    3358,
+    3435,
+    3797,
+    3853,
+    3865,
+    3872,
+    3959,
+    4033,
+    4217,
+    4319,
+    4320,
+    4355,
+    4704,
+    4977,
+    5003,
+    5039,
+    5164,
+    5340,
+    5367,
+    5379,
+    5609,
+    6006,
+    6021,
+    6140,
+    6319,
+    6343,
+    6452,
+    7364,
+    7950,
+    8004,
+    8079,
+    8141,
+    8189,
+    8235,
+    8266,
+    8422,
+    8796,
+    8838,
+    9104,
+    9329,
+    9458,
+    9470,
+    9535,
+    9580,
+    10174,
+    10302,
+    10476,
+    10506,
+    10559,
+    10823,
+    11315,
+    11356,
+    11371,
+    11859,
+    12045,
+    12058,
+    12328,
+    12607,
+    12738,
+    12776,
+    13322,
+    13456,
+    13784,
+    14068,
+    14114,
+    14260,
+    14463,
+    14500,
+    14788,
+    14920,
+    14927,
+    14942,
+    15046,
+    16047,
+    16217,
+    16251,
+    16773,
+    16851,
+    17444,
+    17453,
+    17778,
+    17780,
+    18187,
+    18578,
+    19474,
+    19525,
+    19809,
+    19837,
+    20320,
+    20812,
+    20932,
+    21096,
+    21264,
+    22720,
+    23020,
+    23022,
+    23066,
+    23197,
+    23664,
+    23674,
+    23863,
+    24017,
+    24051,
+    24670,
+    24944,
+    25165,
+    26273,
+    26317,
+    26631,
+    27068,
+    27214,
+    27682,
+    27695,
+    27783,
+    28003,
+    28202,
+    28210,
+    28273,
+    28514,
+    28579,
+    29070,
+    29629,
+    29909,
+    30014,
+    30032,
+    30178,
+    30313,
+    31299,
+    31330,
+    31408,
+    31831,
+    32027,
+    32042,
+    32099,
+    32243,
+    32295
+  ]
+}

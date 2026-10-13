@@ -1,0 +1,125 @@
+{
+  "data": {
+    "rateLimit": {
+      "cost": 1,
+      "remaining": 4986,
+      "resetAt": "2026-10-13T10:20:17Z"
+    },
+    "repository": {
+      "issues": {
+        "pageInfo": {
+          "hasNextPage": true,
+          "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOC0zMVQwOToyNTo1NlrPAAAAATvQyyQ="
+        },
+        "nodes": [
+          {
+            "number": 29290,
+            "title": "issue: DB migration failed",
+            "body": "### Before Submitting\n\n- [x] I searched open and closed issues and discussions for an existing report.\n- [x] I checked whether this is already fixed on the `dev` branch or latest source.\n- [x] I understand that maintainers want a well-written issue before any code pull request.\n- [x] I am using the ",
+            "state": "CLOSED",
+            "stateReason": "DUPLICATE",
+            "createdAt": "2026-08-31T08:58:55Z",
+            "updatedAt": "2026-08-31T09:25:42Z",
+            "closedAt": "2026-08-31T09:25:42Z",
+            "author": {
+              "__typename": "User",
+              "login": "HenkieTenkie62"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "name": "bug"
+                }
+              ]
+            },
+            "comments": {
+              "totalCount": 2,
+              "nodes": [
+                {
+                  "author": {
+                    "__typename": "Bot",
+                    "login": "owui-terminator"
+                  },
+                  "body": "<!-- terminator-bot:related-issues-reply -->\n🔍 **Related Issues Found**\n\nI found some existing issues that might be related. Please check if any of these are duplicates or contain helpful solutions:\n\n1. 🟣 [#27622](https://github.com/open-webui/open-webui/issues/27622) **issue: v0.11 timer polling sc",
+                  "createdAt": "2026-08-31T08:59:08Z"
+                },
+                {
+                  "author": {
+                    "__typename": "User",
+                    "login": "Classic298"
+                  },
+                  "body": "duplicate of https://github.com/open-webui/open-webui/issues/29280",
+                  "createdAt": "2026-08-31T09:25:42Z"
+                }
+              ]
+            },
+            "timelineItems": {
+              "nodes": [
+                {
+                  "__typename": "MarkedAsDuplicateEvent",
+                  "canonical": {
+                    "number": 29290,
+                    "repository": {
+                      "nameWithOwner": "open-webui/open-webui"
+                    }
+                  },
+                  "duplicate": {
+                    "number": 29291,
+                    "repository": {
+                      "nameWithOwner": "open-webui/open-webui"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 29292,
+            "title": "issue: open-webui 0.11.2 有一个循环导入 bug，它导致数据库迁移（alembic migrations）失败",
+            "body": "### Before Submitting\n\n- [x] I searched open and closed issues and discussions for an existing report.\n- [x] I checked whether this is already fixed on the `dev` branch or latest source.\n- [x] I understand that maintainers want a well-written issue before any code pull request.\n- [x] I am using the ",
+            "state": "CLOSED",
+            "stateReason": "DUPLICATE",
+            "createdAt": "2026-08-31T09:16:50Z",
+            "updatedAt": "2026-08-31T09:25:56Z",
+            "closedAt": "2026-08-31T09:25:56Z",
+            "author": {
+              "__typename": "User",
+              "login": "xiaodan1"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "name": "bug"
+                }
+              ]
+            },
+            "comments": {
+              "totalCount": 2,
+              "nodes": [
+                {
+                  "author": {
+                    "__typename": "Bot",
+                    "login": "owui-terminator"
+                  },
+                  "body": "<!-- terminator-bot:related-issues-reply -->\n🔍 **Related Issues Found**\n\nI found some existing issues that might be related. Please check if any of these are duplicates or contain helpful solutions:\n\n1. 🟢 [#29291](https://github.com/open-webui/open-webui/issues/29291) **issue: Migration fails (0.11.",
+                  "createdAt": "2026-08-31T09:16:59Z"
+                },
+                {
+                  "author": {
+                    "__typename": "User",
+                    "login": "Classic298"
+                  },
+                  "body": "duplicate of https://github.com/open-webui/open-webui/issues/29280 and please keep it english",
+                  "createdAt": "2026-08-31T09:25:56Z"
+                }
+              ]
+            },
+            "timelineItems": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

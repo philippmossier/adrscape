@@ -8,7 +8,7 @@ features (what does a change touch, which decisions constrain it). Formerly
 carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
 Roadmap: v1 triage (read-only) -> v2 repo map + planning mode (read-only) ->
-v3 autopilot -> v4 review. Current: v1.
+v3 autopilot -> v4 review. Current: v1 (step 1 of 4 done).
 
 ## Commands
 
@@ -20,6 +20,8 @@ v3 autopilot -> v4 review. Current: v1.
 - `uv run cofabriq fetch <repo>...` / `embed` / `search "..."`: ingest local clones into `data/raw/`, embed into pgvector (needs `OPENAI_API_KEY`), query
 - `uv run cofabriq extract`: LLM fills the domain schema per document into `data/extracted.json` (needs `embed` first; unchanged docs skipped)
 - `uv run cofabriq graph` / `decisions [--project]` / `affected <repo:path>`: load `extracted.json` into Neo4j, query decisions in force and affected projects
+- `uv run cofabriq fetch-issues` / `embed-issues`: issues of `TARGET_REPO` into `data/issues/` (needs `GITHUB_TOKEN`, read-only), title + body into pgvector
+- `uv run cofabriq eval dedupe-set` / `eval dedupe`: freeze the duplicate eval set to `evals/` (once; `--force` rebuilds), print recall@k and the threshold baseline (strict and cluster)
 - `uv run cofabriq mcp`: serve `search`, `decisions`, `affected` as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
 
 ## Layout
@@ -30,6 +32,9 @@ v3 autopilot -> v4 review. Current: v1.
   - `domain.py`: the ADR domain schema the LLM fills (third seam; replaced by the repo map in v2)
   - `ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed, extract (`Extractor` protocol)
   - `store/`: `postgres.py` (vectors), `graph.py` (Neo4j)
+- `src/cofabriq/issues/`: v1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest)
+- `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`)
+- `evals/`: frozen eval sets (issue numbers only, committed)
 - `src/cofabriq/mcp_server.py`: MCP tools
 - `docs/adr/`: architecture decision records, written when the decision is made
 
