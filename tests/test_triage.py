@@ -250,6 +250,9 @@ class OneSource:
     def issue(self, number: int) -> Issue | None:
         return self._issue if self._issue and self._issue.number == number else None
 
+    def created(self, start: object, end: object) -> Iterator[Issue]:
+        return self.issues()
+
 
 def test_refresh_fetches_and_embeds_a_new_issue_then_gather_works(
     conn: postgres.Conn, tmp_path: Path

@@ -2,18 +2,19 @@
 
 import time
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
 
-from cofabriq.issues.model import Comment, Issue, IssueRef, check_repo
+from cofabriq.issues.model import Closer, Comment, Issue, IssueRef, check_repo
 
 API = "https://api.github.com"
 PAGE_SIZE = 50
 MAX_RETRIES = 5
 
-# The fields cofabriq keeps per issue: its first N comments and duplicate marks.
+# The fields cofabriq keeps per issue: its first N comments, duplicate marks
+# and what closed it last (a merged pull request, a commit, or a person).
 FIELDS = """
 fragment IssueFields on Issue {
   number title body state stateReason createdAt updatedAt closedAt
@@ -35,6 +36,9 @@ fragment IssueFields on Issue {
         canonical { ...Target } duplicate { ...Target }
       }
     }
+  }
+  closed: timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) {
+    nodes { ... on ClosedEvent { closer { __typename } } }
   }
 }
 
@@ -77,6 +81,29 @@ query($owner: String!, $name: String!, $number: Int!, $comments: Int!) {
     + FIELDS
 )
 
+# Issues created in a date range: the GraphQL `issues` connection filters by
+# update time only, search filters by creation. Search stops at 1000 results
+# per query, so `created` cuts the range into slices below that.
+SEARCH_QUERY = (
+    """
+query($q: String!, $after: String, $pageSize: Int!, $comments: Int!) {
+  rateLimit { cost remaining resetAt }
+  search(type: ISSUE, query: $q, first: $pageSize, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on Issue { ...IssueFields } }
+  }
+}
+"""
+    + FIELDS
+)
+
+COUNT_QUERY = """
+query($q: String!) { search(type: ISSUE, query: $q, first: 0) { issueCount } }
+"""
+
+SEARCH_CAP = 1000
+CLOSERS: dict[str, Closer] = {"PullRequest": "pull_request", "Commit": "commit"}
+
 type Json = dict[str, Any]
 
 
@@ -89,9 +116,9 @@ class GitHubIssueSource:
     access); a fine-grained token with public read-only access is enough.
 
     Rate limits: the query reports its cost and the remaining budget, so the
-    source waits for the reset before a page it can't afford. Secondary limits
-    and gateway errors (403/429 with `retry-after`, 502-504) are retried with
-    backoff.
+    source waits for the reset before a page it can't afford. Secondary limits,
+    gateway errors (403/429 with `retry-after`, 502-504) and transport errors
+    (a search page that times out) are retried with backoff.
     """
 
     def __init__(
@@ -143,6 +170,44 @@ class GitHubIssueSource:
             variables["after"] = page["pageInfo"]["endCursor"]
             self._wait_for_budget(data["rateLimit"])
 
+    def created(self, start: date, end: date) -> Iterator[Issue]:
+        """Issues created from `start` to `end` (both included, UTC days),
+        oldest first."""
+        for first, last in self._slices(start, end):
+            variables: Json = {
+                "q": f"{self._search(first, last)} sort:created-asc",
+                "after": None,
+                "pageSize": self._page_size,
+                "comments": self._comments,
+            }
+            while True:
+                data = self._query(SEARCH_QUERY, variables)
+                page = data["search"]
+                for node in page["nodes"]:
+                    if node:  # a pull request matches `... on Issue` as {}
+                        yield _issue(self._repo, node)
+                if not page["pageInfo"]["hasNextPage"]:
+                    break
+                variables["after"] = page["pageInfo"]["endCursor"]
+                self._wait_for_budget(data["rateLimit"])
+
+    def _search(self, first: date, last: date) -> str:
+        return f"repo:{self._repo} is:issue created:{first}..{last}"
+
+    def _slices(self, start: date, end: date) -> Iterator[tuple[date, date]]:
+        """Day ranges in order, each under the search cap; halved until it fits."""
+        todo = [(start, end)]
+        while todo:
+            first, last = todo.pop()
+            count = self._query(COUNT_QUERY, {"q": self._search(first, last)})
+            if count["search"]["issueCount"] <= SEARCH_CAP:
+                yield first, last
+                continue
+            if first == last:
+                raise GitHubError(f"more than {SEARCH_CAP} issues created on {first}")
+            middle = first + timedelta(days=(last - first).days // 2)
+            todo += [(middle + timedelta(days=1), last), (first, middle)]
+
     def issue(self, number: int) -> Issue | None:
         """One issue by number; None if it doesn't exist, is a pull request or
         isn't visible to the token."""
@@ -167,9 +232,13 @@ class GitHubIssueSource:
 
     def _query(self, query: str, variables: Json) -> Json:
         for attempt in range(MAX_RETRIES):
-            resp = self._client.post(
-                "/graphql", json={"query": query, "variables": variables}
-            )
+            try:
+                resp = self._client.post(
+                    "/graphql", json={"query": query, "variables": variables}
+                )
+            except httpx.TransportError:  # timeout, dropped connection
+                self._sleep(_backoff(attempt))
+                continue
             wait = self._retry_after(resp, attempt)
             if wait is not None:
                 self._sleep(wait)
@@ -241,6 +310,8 @@ def _issue(repo: str, node: Json) -> Issue:
         else:
             pairs.pop((duplicate, canonical), None)
     reason = node["stateReason"]
+    closed = node["closed"]["nodes"]
+    closer = closed[0]["closer"] if closed else None
     return Issue(
         repo=repo,
         number=node["number"],
@@ -253,6 +324,7 @@ def _issue(repo: str, node: Json) -> Issue:
         created_at=node["createdAt"],
         updated_at=node["updatedAt"],
         closed_at=node["closedAt"],
+        closed_by=CLOSERS.get(closer["__typename"]) if closer else None,
         comment_count=node["comments"]["totalCount"],
         comments=[
             Comment(

@@ -3,19 +3,27 @@
 `fixtures/issues_page{1,2}.json` are two real pages of `QUERY` on
 open-webui/open-webui (since 2026-08-31T09:25:00Z, pageSize 2, comments 2),
 recorded 2026-10-13 with `gh api graphql`. Edited: bodies cut to 300
-characters, `hasNextPage` on page 2 set to false.
+characters, `hasNextPage` on page 2 set to false, `closed` (added to the query
+in 0.1.2) filled in as closed by a person (`closer: null`).
 """
 
 import json
+import re
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 
-from cofabriq.issues.fetch import fetch_issues, fetch_one, load_index, load_issues
+from cofabriq.issues.fetch import (
+    fetch_created,
+    fetch_issues,
+    fetch_one,
+    load_index,
+    load_issues,
+)
 from cofabriq.issues.github import GitHubError, GitHubIssueSource
 from cofabriq.issues.model import Issue, IssueRef, check_repo
 
@@ -108,6 +116,66 @@ def test_unmark_cancels_a_mark() -> None:
     assert issue.duplicate_of == [IssueRef(repo=REPO, number=29290)]
 
 
+@pytest.mark.parametrize(
+    ("closed", "expected"),
+    [
+        ([{"closer": {"__typename": "PullRequest"}}], "pull_request"),
+        ([{"closer": {"__typename": "Commit"}}], "commit"),
+        ([{"closer": None}], None),  # closed by a person
+        ([], None),  # open, never closed
+    ],
+)
+def test_closer_becomes_closed_by(closed: list[Any], expected: str | None) -> None:
+    body = page(2)
+    body["data"]["repository"]["issues"]["nodes"][0]["closed"]["nodes"] = closed
+    handler, _ = replay(httpx.Response(200, json=body))
+
+    [issue, _] = source(handler, []).issues()
+
+    assert issue.closed_by == expected
+
+
+def test_created_cuts_the_range_below_the_search_cap() -> None:
+    """Fake search: 600 issues per day, so a 3-day range (1800) is halved
+    into 1-2 Jan (1200, halved again) and 3 Jan."""
+    node = page(1)["data"]["repository"]["issues"]["nodes"][0]
+    searched: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent = json.loads(request.content)
+        q: str = sent["variables"]["q"]
+        if "issueCount" in sent["query"]:
+            first, last = (
+                date.fromisoformat(d) for d in re.findall(r"\d{4}-\d{2}-\d{2}", q)
+            )
+            count = 600 * ((last - first).days + 1)
+            return httpx.Response(200, json={"data": {"search": {"issueCount": count}}})
+        searched.append(q)
+        search: dict[str, Any] = {
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+            "nodes": [node, {}],  # {}: a pull request in the results
+        }
+        rate = page(1)["data"]["rateLimit"]
+        return httpx.Response(200, json={"data": {"rateLimit": rate, "search": search}})
+
+    src = source(handle, [])
+    issues = list(src.created(date(2023, 1, 1), date(2023, 1, 3)))
+
+    assert searched == [
+        f"repo:{REPO} is:issue created:2023-01-0{d}..2023-01-0{d} sort:created-asc"
+        for d in (1, 2, 3)
+    ]
+    assert [i.number for i in issues] == [node["number"]] * 3
+
+
+def test_created_refuses_a_day_over_the_cap() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"search": {"issueCount": 1001}}})
+
+    with pytest.raises(GitHubError, match="more than 1000"):
+        list(source(handle, []).created(date(2023, 1, 1), date(2023, 1, 1)))
+
+
 def test_waits_for_reset_when_budget_is_spent() -> None:
     first = page(1)
     first["data"]["rateLimit"] = {
@@ -138,6 +206,26 @@ def test_retries_secondary_rate_limit_and_gateway_errors() -> None:
     assert len(issues) == 2
     assert sleeps == [60, 10]
     assert len(sent) == 3
+
+
+def test_retries_timeouts_then_gives_up() -> None:
+    calls: list[int] = []
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("slow page", request=request)
+        return httpx.Response(200, json=page(2))
+
+    sleeps: list[float] = []
+    assert len(list(source(flaky, sleeps).issues())) == 2
+    assert sleeps == [5.0]
+
+    def dead(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("down", request=request)
+
+    with pytest.raises(GitHubError, match="gave up"):
+        list(source(dead, []).issues())
 
 
 def test_plain_403_and_graphql_errors_raise() -> None:
@@ -171,6 +259,9 @@ class ListSource:
 
     def issue(self, number: int) -> Issue | None:
         return next((i for i in self._issues if i.number == number), None)
+
+    def created(self, start: date, end: date) -> Iterator[Issue]:
+        return iter(i for i in self._issues if start <= i.created_at.date() <= end)
 
 
 def recorded_issues() -> list[Issue]:
@@ -271,3 +362,36 @@ def test_fetch_one_on_a_store_without_cursor_keeps_the_old_resume_point(
 def test_fetch_one_returns_none_for_an_unknown_issue(tmp_path: Path) -> None:
     assert fetch_one(ListSource([]), tmp_path, 7) is None
     assert not (tmp_path / "open-webui").exists()
+
+
+def test_fetch_created_stores_the_window_and_resets_no_cursor(tmp_path: Path) -> None:
+    issues = recorded_issues()
+    day = min(i.created_at for i in issues).date()
+    repo_dir = tmp_path / "open-webui" / "open-webui"
+
+    report = fetch_created(ListSource(issues), tmp_path, day, day)
+    again = fetch_created(ListSource(issues), tmp_path, day, day)
+
+    in_window = [i.number for i in issues if i.created_at.date() == day]
+    assert sorted(load_index(repo_dir)) == sorted(in_window)
+    assert (report.written, again.written, again.unchanged) == (
+        len(in_window),
+        0,
+        len(in_window),
+    )
+    # a window is not a resume point: the next full fetch starts at the start
+    full = ListSource(issues)
+    fetch_issues(full, tmp_path)
+    assert full.asked == [None]
+
+
+def test_fetch_created_keeps_an_existing_cursor(tmp_path: Path) -> None:
+    issues = recorded_issues()
+    fetch_issues(ListSource(issues), tmp_path)
+    cursor = max(i.updated_at for i in issues)
+
+    fetch_created(ListSource(issues), tmp_path, date(2020, 1, 1), date(2030, 1, 1))
+    again = ListSource(issues)
+    fetch_issues(again, tmp_path)
+
+    assert again.asked == [cursor]

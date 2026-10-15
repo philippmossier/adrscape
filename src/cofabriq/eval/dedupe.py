@@ -2,9 +2,11 @@
 
 import random
 import re
+import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
@@ -12,6 +14,36 @@ from pydantic import BaseModel
 from cofabriq.issues.model import Issue
 
 type Signal = Literal["mark", "comment"]
+type Negatives = Literal["unlabelled", "closed_by_change"]
+
+
+class Rules(BaseModel):
+    """How one repo's maintainers mark duplicates, written down before any
+    scoring (`[dedupe]` in `targets/<owner>-<name>.toml`). The defaults are
+    the open-webui set's rules.
+
+    `window`: queries (pairs and negatives) created in it, both days included;
+    targets may be older. `duplicate_label`: a comment names a target only on
+    an issue carrying this label (or closed / marked as duplicate by GitHub):
+    the label is the maintainer's decision, the comment says which issue.
+    `negatives`: `unlabelled` samples issues without any duplicate signal;
+    `closed_by_change` takes only issues closed as completed by a merged pull
+    request or a commit, which a duplicate almost never is. `sample`: pairs
+    kept (fixed seed), negatives match the pair count.
+    """
+
+    window: tuple[date, date] | None = None
+    duplicate_label: str | None = None
+    negatives: Negatives = "unlabelled"
+    sample: int | None = None
+
+
+def load_rules(targets_dir: Path, repo: str) -> Rules:
+    path = targets_dir / f"{repo.replace('/', '-')}.toml"
+    if not path.is_file():
+        return Rules()
+    table = tomllib.loads(path.read_text("utf-8")).get("dedupe", {})
+    return Rules.model_validate(table)
 
 
 class Pair(BaseModel):
@@ -31,6 +63,7 @@ class EvalSet(BaseModel):
     repo: str
     frozen_at: datetime
     issues: int  # issues in the snapshot it was built from
+    rules: Rules = Rules()
     pairs: list[Pair]
     negatives: list[int]
 
@@ -41,29 +74,57 @@ class BuildReport:
     by_signal: dict[str, int]
     ambiguous: int  # more than one target named
     unusable: int  # target missing from the snapshot or not earlier
+    found: int  # usable pairs in the window, before sampling
+    negative_pool: int
 
 
-def comment_pattern(repo: str) -> re.Pattern[str]:
-    """`duplicate of #12`, `Duplicate of https://github.com/<repo>/issues/12`."""
+# A comment that says "duplicate": vscode's `/duplicate <ref>` command,
+# "duplicate of #12", a line starting with "Duplicate <url>", "closing as
+# duplicate of [#12](<url>)".
+DUPLICATE = re.compile(
+    r"(?:^|\s)/duplicate\b|\bduplicate\s+of\b|^\s*duplicate\b"
+    r"|\bclos(?:e|ed|ing)\s+as\s+(?:a\s+)?duplicate\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def named_targets(body: str, repo: str) -> set[int]:
+    """In-repo issues a duplicate comment names: `#12` or the issue URL.
+
+    The ref right after the phrase wins ("duplicate of #12. Fixed by PR #13"
+    names #12). Without one ("same root cause as #12 /duplicate"), every ref
+    in the comment counts, so two of them make the query ambiguous. Empty if
+    the comment doesn't say duplicate. `other/repo#12` and other repos' URLs
+    are skipped.
+    """
+    if not DUPLICATE.search(body):
+        return set()
     url = re.escape(f"https://github.com/{repo}/issues/")
-    return re.compile(rf"\bduplicate\s+of\s+(?:#|{url})(\d+)\b", re.IGNORECASE)
+    ref = rf"(?:#(\d+)\b|{url}(\d+)\b)"
+    flags = re.IGNORECASE | re.MULTILINE
+    after = re.findall(rf"(?:{DUPLICATE.pattern})[\s:]*\[?{ref}", body, flags)
+    anywhere = re.findall(rf"(?<![\w/-]){ref}", body, flags)
+    return {int(a or b) for a, b in after or anywhere}
 
 
 def build(
-    issues: Sequence[Issue], frozen_at: datetime, seed: int = 0
+    issues: Sequence[Issue],
+    frozen_at: datetime,
+    rules: Rules | None = None,
+    seed: int = 0,
 ) -> tuple[EvalSet, BuildReport]:
     """Label pairs from GitHub's duplicate marks and human comments.
 
     Bot comments are ignored: some repos run a bot that lists likely
     duplicates on every issue, which would turn the eval into "can you read
-    the bot". An issue naming more than one target is dropped as ambiguous.
-    Negatives: as many issues with no duplicate signal at all, sampled with
-    a fixed seed. Some are unlabelled duplicates; that noise costs every
-    method the same.
+    the bot". So are comments with "🤖" (maintainer accounts posting LLM
+    output). An issue naming more than one target is dropped as ambiguous.
+    Negatives follow `rules.negatives`; with `unlabelled`, some are
+    unlabelled duplicates, a noise that costs every method the same.
     """
+    rules = rules or Rules()
     [repo] = {i.repo for i in issues}
     by_number = {i.number: i for i in issues}
-    pattern = comment_pattern(repo)
 
     targets: dict[int, dict[int, Signal]] = {}  # query -> target -> signal
     for issue in issues:
@@ -73,27 +134,36 @@ def build(
         for ref in issue.duplicates:
             if ref.repo == repo:
                 targets.setdefault(ref.number, {})[issue.number] = "mark"
+        if not _labelled_duplicate(issue, rules):
+            continue
         for comment in issue.comments:
-            if comment.bot:
+            if comment.bot or "🤖" in comment.body:
                 continue
-            for match in pattern.finditer(comment.body):
-                named = targets.setdefault(issue.number, {})
-                named.setdefault(int(match.group(1)), "comment")
+            for number in named_targets(comment.body, repo) - {issue.number}:
+                targets.setdefault(issue.number, {}).setdefault(number, "comment")
 
     # one target per query; ambiguous ones join no cluster either
     clear = {q: next(iter(n.items())) for q, n in targets.items() if len(n) == 1}
     clusters = _clusters([(q, t) for q, (t, _) in clear.items()])
 
     pairs: list[Pair] = []
-    unusable = 0
+    unusable = ambiguous = 0
     for query, (target, signal) in sorted(clear.items()):
         q, t = by_number.get(query), by_number.get(target)
+        if q is not None and not _in_window(q, rules):
+            continue
         if q is None or t is None or t.created_at >= q.created_at:
             unusable += 1
             continue
         siblings = sorted(clusters[target] - {query, target})
         pairs.append(Pair(query=query, target=target, signal=signal, siblings=siblings))
-    ambiguous = len(targets) - len(clear)
+    for query in targets.keys() - clear.keys():
+        q = by_number.get(query)
+        ambiguous += q is None or _in_window(q, rules)
+    found = len(pairs)
+    if rules.sample is not None and found > rules.sample:
+        kept = random.Random(seed).sample(pairs, rules.sample)
+        pairs = sorted(kept, key=lambda p: p.query)
 
     labelled = targets.keys() | {t for named in targets.values() for t in named}
     oldest = min(i.created_at for i in issues)
@@ -103,19 +173,39 @@ def build(
         if i.number not in labelled
         and i.state_reason != "duplicate"
         and i.created_at > oldest
+        and _in_window(i, rules)
+        and not (rules.duplicate_label and rules.duplicate_label in i.labels)
+        and (
+            rules.negatives == "unlabelled"
+            or (i.state_reason == "completed" and i.closed_by is not None)
+        )
     )
     negatives = sorted(random.Random(seed).sample(pool, min(len(pairs), len(pool))))
 
     by_signal = {s: sum(p.signal == s for p in pairs) for s in ("mark", "comment")}
-    report = BuildReport(len(pairs), by_signal, ambiguous, unusable)
+    report = BuildReport(len(pairs), by_signal, ambiguous, unusable, found, len(pool))
     evalset = EvalSet(
         repo=repo,
         frozen_at=frozen_at,
         issues=len(issues),
+        rules=rules,
         pairs=pairs,
         negatives=negatives,
     )
     return evalset, report
+
+
+def _labelled_duplicate(issue: Issue, rules: Rules) -> bool:
+    if rules.duplicate_label is None:
+        return True
+    return rules.duplicate_label in issue.labels or issue.state_reason == "duplicate"
+
+
+def _in_window(issue: Issue, rules: Rules) -> bool:
+    if rules.window is None:
+        return True
+    start, end = rules.window
+    return start <= issue.created_at.date() <= end
 
 
 def _clusters(edges: Sequence[tuple[int, int]]) -> dict[int, set[int]]:

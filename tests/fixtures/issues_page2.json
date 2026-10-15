@@ -55,6 +55,13 @@
             },
             "timelineItems": {
               "nodes": []
+            },
+            "closed": {
+              "nodes": [
+                {
+                  "closer": null
+                }
+              ]
             }
           },
           {
@@ -100,6 +107,13 @@
             },
             "timelineItems": {
               "nodes": []
+            },
+            "closed": {
+              "nodes": [
+                {
+                  "closer": null
+                }
+              ]
             }
           }
         ]

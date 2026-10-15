@@ -19,8 +19,9 @@ answering what a change touches, which decisions constrain it and what
 related work already exists.
 
 - **A number per stage.** Every retrieval or agent change is measured on a real
-  issue history ([open-webui](https://github.com/open-webui/open-webui), frozen
-  snapshot). The numbers live in this README.
+  issue history ([microsoft/vscode](https://github.com/microsoft/vscode) and
+  [open-webui](https://github.com/open-webui/open-webui), frozen snapshots).
+  The numbers live in this README.
 - **Safe by default on public repos.** Read-only until 0.3. After that, writes
   happen only on a local trigger by the dev, as a dry run unless `--apply` is
   passed. They are limited to one branch and a draft PR by a scoped token, not
@@ -83,11 +84,49 @@ both reads: which one is wrong is unknown. The same card is served as the
 
 ## Numbers
 
-Measured on [open-webui](https://github.com/open-webui/open-webui)'s issue
-history (10,302 issues, snapshot frozen 2026-10-13). Ground truth is what
-its maintainers marked: 155 duplicate pairs from GitHub's duplicate marks
-and human "duplicate of #N" comments, plus 155 non-duplicates. Each query
-only sees issues filed before it, and only comments written before it.
+Duplicate detection is measured on two real issue histories. Each query only
+sees issues filed before it, and only comments written before it.
+
+**microsoft/vscode, provable labels (0.1.2).** 62,467 issues (created
+2022-2024, snapshot frozen 2026-10-15); queries are 2023-2024. A duplicate
+counts only if a maintainer set vscode's `*duplicate` label and a human
+comment names the target (`/duplicate #N`). A non-duplicate counts only if
+it was closed as completed by a merged PR or a commit. 2025 on is left out:
+maintainer accounts there post LLM-written triage comments, and labels
+suggested by an LLM would make an LLM eval circular. The rules are in
+[`targets/microsoft-vscode.toml`](targets/microsoft-vscode.toml), written
+before scoring; 200 pairs and 200 non-duplicates sampled with a fixed seed.
+
+| Dedupe, vscode (n = 400), verdict 0.1.1      | Embedding threshold | LLM verdict      |
+| -------------------------------------------- | ------------------- | ---------------- |
+| `duplicate_of` precision                     | 0.212               | 0.346            |
+| `duplicate_of` recall                        | 0.145               | 0.235            |
+| precision / recall, any issue of the cluster | 0.372 / 0.255       | 0.515 / 0.350    |
+| `unsure` (abstained), of which right         | -                   | 88, 11 (cluster) |
+| cost / median latency per issue              | embedding only      | $0.00073 / 1.9 s |
+
+What it says: about half of the `duplicate_of` calls are right, so the
+verdict is a suggestion for the dev, never an action. Of the 136 calls, 32
+hit a provable non-duplicate, and only 1 of those shares a fix with its
+target. Most are a narrow follow-up called a duplicate of the broader
+feature issue ("Fine tune `clear` alert" vs "Alert screen reader users that
+something has occurred"). Retrieval caps the rest: in a 62k pool the target
+is in the top 10 for 40% of duplicates (56% counting its cluster).
+
+Known gaps of the set: 21% of otherwise usable pairs name a target from
+before 2022 and are dropped, so long-lived issues are under-represented.
+Non-duplicates closed by a PR lean towards team-filed work items, which are
+harder than typical user reports.
+
+Tried and dropped: hybrid retrieval (Postgres full-text search on the
+query's rarest words, fused with the vector list by reciprocal rank). Top-10
+recall moved within noise on vscode (0.40 to 0.42), dropped on open-webui
+(0.568 to 0.561), and top-1 got worse on both.
+
+**open-webui, maintainer marks (0.1.0, 0.1.1).**
+[open-webui](https://github.com/open-webui/open-webui), 10,302 issues,
+snapshot frozen 2026-10-13: 155 duplicate pairs from GitHub's duplicate
+marks and human "duplicate of #N" comments, plus 155 issues nobody marked.
 
 | Dedupe, open-webui (n = 310)                 | Embedding threshold | LLM verdict 0.1.0 | LLM verdict 0.1.1 |
 | -------------------------------------------- | ------------------- | ----------------- | ----------------- |
@@ -113,10 +152,9 @@ hand check of the 63 claims the labels call wrong found 40 real duplicates
 the maintainers never marked (or marked against another issue of the same
 problem), 13 real errors and 10 unclear. The real errors are same-symptom,
 different-cause calls (the same pip error on two Python versions, a
-regression matched to the original feature request). That hand check is a
-judgement, not a measurement, so it is not in the table; the next step is
-an eval set whose labels are provable on both sides (0.1.2). Either way
-the verdict only suggests: the dev decides.
+regression matched to the original feature request). That hand check was
+an LLM's judgement plus a spot check, and the vscode set above corrected
+it: on provable labels, the precision is about 0.5, not 0.8.
 
 Triage card, on the [playground](https://github.com/philippmossier/local-ai-chat-playground)
 (24 seeded issues with 4 duplicate pairs and 4 injection attempts), three
@@ -129,7 +167,9 @@ winner: 1 conflict in 3 runs, on a wrongly typed card. This is a
 sanity check, not a benchmark: the issues and their expected labels were
 written together. Type accuracy on messy real issues is still open.
 
-Reproduce: `cofabriq eval dedupe` (the set is committed in `evals/`) and
+Reproduce: `cofabriq eval dedupe --repo <repo> [--verdict]` (the sets are
+committed in `evals/`; vscode needs `fetch-issues --repo microsoft/vscode
+--created 2022-01-01..2024-12-31` first, about an hour) and
 `cofabriq eval triage --repo philippmossier/local-ai-chat-playground`.
 
 ### Underneath: the context layer
@@ -212,9 +252,9 @@ Development: `make check` runs ruff, pyright (strict) and pytest.
       latency per issue
 - [x] **0.1.1:** the verdict may abstain (`unsure`), card-verdict conflicts
       are flagged
-- [ ] **0.1.2:** a dedupe eval set with provable labels on both sides
-      (duplicates named by a maintainer action, non-duplicates closed by a
-      merged PR or commit)
+- [x] **0.1.2:** a dedupe eval set with provable labels on both sides
+      (microsoft/vscode: duplicates named by a maintainer action,
+      non-duplicates closed by a merged PR or commit)
 - [ ] **0.2: repo map + planning mode (read-only).** Components, files,
       co-change, PRs, issues and decisions in Neo4j; `impact` of an issue or
       a plan. Number: predicted vs actually touched components

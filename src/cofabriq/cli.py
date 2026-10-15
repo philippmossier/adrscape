@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from functools import partial
 from pathlib import Path
 from statistics import fmean, median
@@ -31,7 +31,7 @@ from cofabriq.eval import triage as triage_eval
 from cofabriq.issues import triage as triage_mod
 from cofabriq.issues import vectors
 from cofabriq.issues import verdict as verdict_mod
-from cofabriq.issues.fetch import fetch_issues, load_issues
+from cofabriq.issues.fetch import fetch_created, fetch_issues, load_issues
 from cofabriq.issues.github import GitHubIssueSource
 from cofabriq.issues.model import Issue, check_repo
 from cofabriq.mcp_server import build as build_mcp
@@ -121,9 +121,25 @@ def _target_repo(repo: str | None) -> str:
     return check_repo(target)
 
 
+def _date_range(value: str) -> tuple[date, date]:
+    """`2022-01-01..2024-12-31`, GitHub search syntax."""
+    try:
+        start, end = (date.fromisoformat(part) for part in value.split(".."))
+    except ValueError:
+        msg = f"expected YYYY-MM-DD..YYYY-MM-DD, got {value!r}"
+        raise typer.BadParameter(msg) from None
+    if start > end:
+        raise typer.BadParameter(f"{start} is after {end}")
+    return start, end
+
+
 @app.command("fetch-issues")
-def fetch_issues_cmd(repo: str | None = None) -> None:
-    """Copy a GitHub repo's issues into the issues dir, only what changed."""
+def fetch_issues_cmd(repo: str | None = None, created: str | None = None) -> None:
+    """Copy a GitHub repo's issues into the issues dir, only what changed.
+
+    `--created 2022-01-01..2024-12-31` fetches the issues created in that
+    window instead (eval sets on large repos); the update cursor is untouched.
+    """
     settings = get_settings()
     target = _target_repo(repo)
     if settings.github_token is None:
@@ -134,6 +150,14 @@ def fetch_issues_cmd(repo: str | None = None) -> None:
         settings.github_token.get_secret_value(),
         comments=settings.issue_comments,
     )
+    if created is not None:
+        start, end = _date_range(created)
+        report = fetch_created(source, settings.issues_dir, start, end)
+        typer.echo(
+            f"{report.written} written, {report.unchanged} unchanged "
+            f"(created {start}..{end}) -> {settings.issues_dir}"
+        )
+        return
     report = fetch_issues(source, settings.issues_dir)
     since = report.since.isoformat() if report.since else "the start"
     typer.echo(
@@ -164,14 +188,17 @@ def dedupe_set(repo: str | None = None, force: bool = False) -> None:
     if path.exists() and not force:
         typer.echo(f"{path} is frozen; --force to rebuild it", err=True)
         raise typer.Exit(code=1)
-    issues = load_issues(get_settings().issues_dir, target)
-    evalset, report = dedupe.build(issues, frozen_at=datetime.now(UTC))
+    settings = get_settings()
+    issues = load_issues(settings.issues_dir, target)
+    rules = dedupe.load_rules(settings.targets_dir, target)
+    evalset, report = dedupe.build(issues, frozen_at=datetime.now(UTC), rules=rules)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(evalset.model_dump_json(indent=2) + "\n", encoding="utf-8")
     typer.echo(
-        f"{report.pairs} pairs ({report.by_signal}), {len(evalset.negatives)} "
-        f"negatives from {len(issues)} issues; dropped {report.ambiguous} "
-        f"ambiguous, {report.unusable} unusable -> {path}"
+        f"{report.pairs} pairs ({report.by_signal}) of {report.found} found, "
+        f"{len(evalset.negatives)} negatives of {report.negative_pool}, from "
+        f"{len(issues)} issues; dropped {report.ambiguous} ambiguous, "
+        f"{report.unusable} unusable -> {path}"
     )
 
 

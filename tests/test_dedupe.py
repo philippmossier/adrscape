@@ -1,9 +1,19 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from typing import Literal
 
 import pytest
 
 from cofabriq.context.store import postgres
-from cofabriq.eval.dedupe import Ranked, build, score, score_verdicts
+from cofabriq.eval.dedupe import (
+    Ranked,
+    Rules,
+    build,
+    load_rules,
+    named_targets,
+    score,
+    score_verdicts,
+)
 from cofabriq.issues import vectors
 from cofabriq.issues.model import Comment, Issue, IssueRef
 from tests.test_embed_store import FakeEmbedder
@@ -11,6 +21,7 @@ from tests.test_embed_store import FakeEmbedder
 REPO = "acme/app"
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 URL = f"https://github.com/{REPO}/issues"
+OTHER = "https://github.com/acme/other/issues"
 
 
 def issue(
@@ -21,6 +32,8 @@ def issue(
     reason: str | None = None,
     duplicate_of: list[int] | None = None,
     duplicates: list[int] | None = None,
+    labels: list[str] | None = None,
+    closed_by: Literal["pull_request", "commit"] | None = None,
 ) -> Issue:
     created = T0 + timedelta(days=number)
     return Issue(
@@ -31,10 +44,11 @@ def issue(
         state="closed" if reason else "open",
         state_reason=reason,
         author="someone",
-        labels=[],
+        labels=labels or [],
         created_at=created,
         updated_at=created,
         closed_at=None,
+        closed_by=closed_by,
         comment_count=len(comments or []),
         comments=[
             Comment(author="x", bot=bot, body=text, created_at=created)
@@ -71,6 +85,83 @@ def test_build_labels_pairs_from_marks_and_human_comments() -> None:
     # negatives: no signal, not the oldest issue, not a target
     assert len(evalset.negatives) == 2
     assert set(evalset.negatives) <= {3, 4, 7, 11, 12}
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("/duplicate #212090", {212090}),
+        (f"/duplicate\n\n{URL}/177046\n\nTracked there", {177046}),
+        (f"Duplicate {URL}/70768", {70768}),
+        (f"Closing as duplicate of [#217987]({URL}/217987)", {217987}),
+        (f"same root cause as {URL}/189161\n\n/duplicate ", {189161}),
+        ("Closing as duplicate of #29036. Fix merged via PR #29037.", {29036}),
+        ("/duplicate\n\nsee #1 and #2", {1, 2}),  # the builder drops it as ambiguous
+        ("/duplicate", set[int]()),  # no target named
+        ("is #51364 the one you mean?", set[int]()),  # not a duplicate comment
+        (f"Duplicate of acme/other#5, {OTHER}/6", set[int]()),
+        ("this duplicates the old flow, see #7", set[int]()),
+    ],
+)
+def test_named_targets(body: str, expected: set[int]) -> None:
+    assert named_targets(body, REPO) == expected
+
+
+def test_rules_gate_comments_by_label_and_cut_the_window() -> None:
+    rules = Rules(
+        window=(date(2026, 1, 10), date(2026, 1, 20)),
+        duplicate_label="*duplicate",
+        negatives="closed_by_change",
+    )
+    dup = ["*duplicate"]
+    issues = [
+        issue(1),
+        issue(2),
+        issue(3, comments=[("/duplicate #1", False)], labels=dup),  # before window
+        issue(11, comments=[("/duplicate #1", False)], labels=dup),
+        issue(12, comments=[("/duplicate #2", False)]),  # no label: no pair
+        issue(13, duplicate_of=[2]),  # GitHub's mark needs no label
+        issue(14, comments=[("/duplicate #2", True)], labels=dup),  # bot
+        issue(15, comments=[("/duplicate #2 🤖", False)], labels=dup),
+        issue(16, reason="completed", closed_by="pull_request"),
+        issue(17, reason="completed", closed_by="commit"),
+        issue(18, reason="completed"),  # closed by a person: not provable
+        issue(19, reason="completed", closed_by="pull_request", labels=dup),
+        issue(25, reason="completed", closed_by="commit"),  # after window
+    ]
+
+    evalset, report = build(issues, frozen_at=T0, rules=rules)
+
+    assert [(p.query, p.target) for p in evalset.pairs] == [(11, 1), (13, 2)]
+    assert report.negative_pool == 2
+    assert evalset.negatives == [16, 17]
+    assert evalset.rules == rules
+
+
+def test_sample_keeps_pairs_and_matches_negatives() -> None:
+    rules = Rules(sample=3)
+    issues = [issue(1)]
+    issues += [issue(n, duplicate_of=[1]) for n in range(2, 12)]
+    issues += [issue(n) for n in range(12, 30)]
+
+    a, report = build(issues, frozen_at=T0, rules=rules)
+    b, _ = build(issues, frozen_at=T0, rules=rules)
+
+    assert (report.found, report.pairs, len(a.negatives)) == (10, 3, 3)
+    assert a == b
+    # siblings still come from the whole cluster, not the sample
+    assert all(len(p.siblings) == 9 for p in a.pairs)
+
+
+def test_load_rules(tmp_path: Path) -> None:
+    (tmp_path / "acme-app.toml").write_text(
+        '[dedupe]\nwindow = ["2023-01-01", "2024-12-31"]\nsample = 200\n'
+    )
+
+    assert load_rules(tmp_path, REPO) == Rules(
+        window=(date(2023, 1, 1), date(2024, 12, 31)), sample=200
+    )
+    assert load_rules(tmp_path, "acme/none") == Rules()
 
 
 def test_siblings_come_from_the_whole_cluster() -> None:

@@ -1,0 +1,24 @@
+# Duplicate eval rules for microsoft/vscode, fixed before scoring (0.1.2).
+# No [components]: triage on vscode is not evaluated, only dedupe.
+#
+# Window: queries created 2023-2024. Earlier would work too; later is out
+# because maintainer accounts post LLM-written triage comments from 2025 on,
+# and labels made by an LLM would make an LLM eval circular. Fetched pool:
+# from 2022-01-01, so early queries have a year of history to match.
+# Measured at freeze: 480 of 2310 otherwise usable pairs (21%) name a target
+# from before 2022 and are dropped as unusable, so long-lived issues (old
+# feature requests that keep attracting duplicates) are under-represented.
+# Pairs whose target is newer than the query (378, maintainers closing the
+# older issue in favour of a busier one) are dropped too: at triage time the
+# target didn't exist.
+#
+# Positive: the `*duplicate` label (set by a maintainer, the bot's close
+# comment names no target) plus one human comment naming the target
+# (`/duplicate #N`, "duplicate of <url>").
+# Negative: closed as completed by a merged pull request or a commit.
+
+[dedupe]
+window = ["2023-01-01", "2024-12-31"]
+duplicate_label = "*duplicate"
+negatives = "closed_by_change"
+sample = 200

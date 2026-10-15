@@ -22,8 +22,8 @@ card-verdict conflicts); 0.1.2 next (dedupe eval set with provable labels);
 - `uv run cofabriq fetch <repo>...` / `embed` / `search "..."`: ingest local clones into `data/raw/`, embed into pgvector (needs `OPENAI_API_KEY`), query
 - `uv run cofabriq extract`: LLM fills the domain schema per document into `data/extracted.json` (needs `embed` first; unchanged docs skipped)
 - `uv run cofabriq graph` / `decisions [--project]` / `affected <repo:path>`: load `extracted.json` into Neo4j, query decisions in force and affected projects
-- `uv run cofabriq fetch-issues` / `embed-issues`: issues of `TARGET_REPO` into `data/issues/` (needs `GITHUB_TOKEN`, read-only), title + body into pgvector
-- `uv run cofabriq eval dedupe-set` / `eval dedupe`: freeze the duplicate eval set to `evals/` (once; `--force` rebuilds), print recall@k and the threshold baseline (strict and cluster)
+- `uv run cofabriq fetch-issues` / `embed-issues`: issues of `TARGET_REPO` into `data/issues/` (needs `GITHUB_TOKEN`, read-only), title + body into pgvector; `fetch-issues --repo <r> --created 2022-01-01..2024-12-31` fetches a creation window instead (eval sets on large repos, cursor untouched)
+- `uv run cofabriq eval dedupe-set` / `eval dedupe`: freeze the duplicate eval set to `evals/` (once; `--force` rebuilds), print recall@k and the threshold baseline (strict and cluster); per-repo rules (window, duplicate label, negatives, sample) in `targets/<owner>-<name>.toml` `[dedupe]`
 - `uv run cofabriq triage <n> [--repo] [--json]`: triage card for one issue (two LLM calls: card fields, duplicate verdict); fetches and embeds that issue first if it is new or changed on GitHub (`fetch.py` keeps the `fetch-issues` cursor in `cursor.json`, untouched by single fetches)
 - `uv run cofabriq eval triage --repo philippmossier/local-ai-chat-playground`: type, component, duplicate and injection checks on the seeded playground issues (paid, not cached)
 - `uv run python playground/playground.py seed` / `reset --yes`: seed or wipe-and-reseed the demo playground via `gh` (your login; the repo is hard-coded)

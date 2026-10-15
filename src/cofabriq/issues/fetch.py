@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from pydantic import TypeAdapter
@@ -58,6 +58,36 @@ def fetch_issues(source: IssueSource, issues_dir: Path) -> IssueFetchReport:
     if latest is not None:
         _write_cursor(repo_dir, latest)
     return IssueFetchReport(written=written, unchanged=unchanged, since=since)
+
+
+def fetch_created(
+    source: IssueSource, issues_dir: Path, start: date, end: date
+) -> IssueFetchReport:
+    """Store the issues created from `start` to `end`, skip unchanged ones.
+
+    For eval sets on a time window of a large repo. A store that has no cursor
+    yet gets a null one: a window is not a prefix of the update order, so a
+    later `fetch_issues` must start from the beginning, not from the newest
+    `updated_at` in the index. An existing cursor is left alone (as in
+    `fetch_one`). Rerun after an interruption: unchanged issues are skipped.
+    """
+    repo_dir = issue_dir(issues_dir, source.repo)
+    index = load_index(repo_dir)
+    if not (repo_dir / CURSOR_FILE).is_file():
+        _write_cursor(repo_dir, None)
+    written = unchanged = 0
+    for issue in source.created(start, end):
+        if index.get(issue.number) == issue.updated_at:
+            unchanged += 1
+            continue
+        _write_issue(repo_dir, issue)
+        index[issue.number] = issue.updated_at
+        written += 1
+        if written % FLUSH_EVERY == 0:
+            _write_index(repo_dir, index)
+    if written:
+        _write_index(repo_dir, index)
+    return IssueFetchReport(written=written, unchanged=unchanged, since=None)
 
 
 def fetch_one(source: IssueSource, issues_dir: Path, number: int) -> Issue | None:

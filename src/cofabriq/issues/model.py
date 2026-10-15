@@ -2,10 +2,12 @@
 
 import re
 from collections.abc import Iterator
-from datetime import datetime
-from typing import Protocol
+from datetime import date, datetime
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
+
+type Closer = Literal["pull_request", "commit"]
 
 REPO_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*)/[A-Za-z0-9._-]+$")
 
@@ -43,6 +45,9 @@ class Issue(BaseModel):
     `duplicate_of` / `duplicates` are GitHub's own duplicate marks (net of
     unmark events) seen from this issue's timeline, one list per direction.
     `Duplicate of #N` comments are not parsed here: that is the eval set's job.
+    `closed_by` is what closed it last: a merged pull request or a commit that
+    references it, None for a person or an open issue (and for stores fetched
+    before the field existed).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -58,6 +63,7 @@ class Issue(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    closed_by: Closer | None = None
     comment_count: int
     comments: list[Comment]
     duplicate_of: list[IssueRef]  # this issue is a duplicate of these
@@ -78,3 +84,7 @@ class IssueSource(Protocol):
     def issues(self, since: datetime | None = None) -> Iterator[Issue]: ...
 
     def issue(self, number: int) -> Issue | None: ...
+
+    def created(self, start: date, end: date) -> Iterator[Issue]:
+        """Issues created from `start` to `end` (both included), oldest first."""
+        ...
