@@ -8,9 +8,7 @@ features (what does a change touch, which decisions constrain it). Formerly
 carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
 Roadmap: 0.1 triage (read-only) -> 0.2 repo map + planning mode (read-only) ->
-0.3 autopilot -> 0.4 review. Current: v0.1.1 released (abstention,
-card-verdict conflicts); 0.1.2 next (dedupe eval set with provable labels);
-0.2 not planned yet.
+0.3 autopilot -> 0.4 review. Current: v0.1.3 (readiness route, missing-info eval); 0.2 next.
 
 ## Commands
 
@@ -24,6 +22,7 @@ card-verdict conflicts); 0.1.2 next (dedupe eval set with provable labels);
 - `uv run cofabriq graph` / `decisions [--project]` / `affected <repo:path>`: load `extracted.json` into Neo4j, query decisions in force and affected projects
 - `uv run cofabriq fetch-issues` / `embed-issues`: issues of `TARGET_REPO` into `data/issues/` (needs `GITHUB_TOKEN`, read-only), title + body into pgvector; `fetch-issues --repo <r> --created 2022-01-01..2024-12-31` fetches a creation window instead (eval sets on large repos, cursor untouched)
 - `uv run cofabriq eval dedupe-set` / `eval dedupe`: freeze the duplicate eval set to `evals/` (once; `--force` rebuilds), print recall@k and the threshold baseline (strict and cluster); per-repo rules (window, duplicate label, negatives, sample) in `targets/<owner>-<name>.toml` `[dedupe]`
+- `uv run cofabriq eval readiness-set [--test]` / `eval readiness [--test]`: freeze the missing-info eval set (vscode `info-needed`, `[readiness]` rules in the target file, label history checked on GitHub) and score needs_info precision/recall; dev split 2023-2024, held-out test split 2022 (score once)
 - `uv run cofabriq triage <n> [--repo] [--json]`: triage card for one issue (two LLM calls: card fields, duplicate verdict); fetches and embeds that issue first if it is new or changed on GitHub (`fetch.py` keeps the `fetch-issues` cursor in `cursor.json`, untouched by single fetches)
 - `uv run cofabriq eval triage --repo philippmossier/local-ai-chat-playground`: type, component, duplicate and injection checks on the seeded playground issues (paid, not cached)
 - `uv run python playground/playground.py seed` / `reset --yes`: seed or wipe-and-reseed the demo playground via `gh` (your login; the repo is hard-coded)
@@ -37,8 +36,8 @@ card-verdict conflicts); 0.1.2 next (dedupe eval set with provable labels);
   - `domain.py`: the ADR domain schema the LLM fills (third seam; replaced by the repo map in 0.2)
   - `ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed, extract (`Extractor` protocol)
   - `store/`: `postgres.py` (vectors), `graph.py` (Neo4j)
-- `src/cofabriq/issues/`: 0.1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest), `verdict.py` (checked duplicate verdict), `triage.py` (the triage card schema, checks and assembly)
-- `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`, `triage.py`)
+- `src/cofabriq/issues/`: 0.1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest), `verdict.py` (checked duplicate verdict), `triage.py` (the triage card schema, checks and assembly), `readiness.py` (required info with verified quotes, the route, the reply draft)
+- `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`, `readiness.py`, `triage.py`)
 - `targets/<owner>-<name>.toml`: per target repo config (the component list triage picks from)
 - `playground/`: seed issues with expected labels (`seed.toml`) and the seed/reset script for the demo repo
 - `evals/`: frozen eval sets (issue numbers only, committed)

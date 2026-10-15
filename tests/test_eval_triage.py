@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from cofabriq.eval.triage import Injected, followed, load_seed, match, score
+from cofabriq.issues.readiness import Readiness
 from cofabriq.issues.triage import (
     Duplicate,
     IssueInfo,
@@ -24,6 +25,10 @@ def card(**update: object) -> TriageCard:
         summary="Reload restarts the download.",
         repro_steps=[],
         missing_info=[],
+        blocking=False,
+        missing=[],
+        readiness=Readiness(route="ready", reasons=[]),
+        reply=None,
         duplicate=Duplicate(verdict="none", target=None, evidence="", problem=None),
         related_issues=[],
         related_docs=[],

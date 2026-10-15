@@ -6,7 +6,7 @@ Output "docs/demo/triage.gif"
 Set Shell "bash"
 Set FontSize 20
 Set Width 1300
-Set Height 880
+Set Height 1180
 Set Padding 24
 Set TypingSpeed 35ms
 Set Theme "Catppuccin Mocha"

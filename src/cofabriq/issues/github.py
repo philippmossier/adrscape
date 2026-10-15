@@ -1,7 +1,8 @@
 """`GitHubIssueSource`: a repo's issues over the GitHub GraphQL API."""
 
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -101,6 +102,17 @@ COUNT_QUERY = """
 query($q: String!) { search(type: ISSUE, query: $q, first: 0) { issueCount } }
 """
 
+# Label history and body edits of single issues, for eval sets.
+HISTORY_FIELDS = """
+fragment History on Issue {
+  lastEditedAt
+  timelineItems(first: 100, itemTypes: [LABELED_EVENT]) {
+    nodes { ... on LabeledEvent { label { name } } }
+  }
+}
+"""
+HISTORY_BATCH = 25
+
 SEARCH_CAP = 1000
 CLOSERS: dict[str, Closer] = {"PullRequest": "pull_request", "Commit": "commit"}
 
@@ -109,6 +121,12 @@ type Json = dict[str, Any]
 
 class GitHubError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class History:
+    labels_ever: frozenset[str]
+    body_edited: bool
 
 
 class GitHubIssueSource:
@@ -229,6 +247,49 @@ class GitHubIssueSource:
             raise GitHubError(f"repository not found: {self._repo}")
         node = data["repository"]["issue"]
         return _issue(self._repo, node) if node else None
+
+    def history(self, numbers: Sequence[int]) -> dict[int, History]:
+        """Labels each issue ever carried and whether its body was edited,
+        HISTORY_BATCH issues per request. Absent: not an issue (any more).
+
+        For eval sets: current labels hide one that was removed, and an
+        edited body is not the text a maintainer reacted to.
+        """
+        owner, name = self._repo.split("/")
+        out: dict[int, History] = {}
+        for start in range(0, len(numbers), HISTORY_BATCH):
+            batch = numbers[start : start + HISTORY_BATCH]
+            fields = "\n".join(
+                f"i{n}: issue(number: {int(n)}) {{ ...History }}" for n in batch
+            )
+            query = (
+                "query($owner: String!, $name: String!) {\n"
+                "  repository(owner: $owner, name: $name) {\n"
+                f"{fields}\n  }}\n}}\n{HISTORY_FIELDS}"
+            )
+            try:
+                data = self._query(query, {"owner": owner, "name": name})
+            except GitHubError as exc:
+                if "Could not resolve" not in str(exc):
+                    raise
+                # A transferred or deleted issue fails the whole batch.
+                if len(batch) > 1:
+                    for n in batch:
+                        out |= self.history([n])
+                continue
+            for key, node in data["repository"].items():
+                if node is None:
+                    continue
+                labels = {
+                    e["label"]["name"]
+                    for e in node["timelineItems"]["nodes"]
+                    if e.get("label")
+                }
+                out[int(key[1:])] = History(
+                    labels_ever=frozenset(labels),
+                    body_edited=node["lastEditedAt"] is not None,
+                )
+        return out
 
     def _query(self, query: str, variables: Json) -> Json:
         for attempt in range(MAX_RETRIES):

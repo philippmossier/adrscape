@@ -42,6 +42,8 @@ def fields(**update: object) -> Fields:
         summary="Reloading restarts the model download.",
         repro_steps=["Reload during download"],
         missing_info=["Which browser?"],
+        blocking=False,
+        info=[],
     )
     return base.model_copy(update=update)
 

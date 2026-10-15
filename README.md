@@ -7,7 +7,7 @@ by the repository's own CI, reviewed and handed to the dev as a draft PR.
 Real features stay with the dev, who plans them in **planning mode** on a map
 of the repository. Today, in 0.1: issue in, triage card out.
 
-![cofabriq triage on two playground issues: a duplicate proven by a quote, then an issue with an injected instruction that the card ignores](docs/demo/triage.gif)
+![cofabriq triage on two playground issues: a likely duplicate proven by a quote, routed to the dev with a reply draft for the missing version, then an issue with an injected instruction that the card ignores, routed ready](docs/demo/triage.gif)
 
 ## Why it is built this way
 
@@ -34,7 +34,9 @@ related work already exists.
 **0.1: issue in, triage card out (read-only).** Point it at a GitHub
 repository and an issue number, get a triage card: type, severity, component,
 a one-line summary, repro steps, questions for the reporter, a duplicate
-verdict with a quoted sentence as evidence, related issues and related docs.
+verdict with a quoted sentence as evidence, related issues and related docs,
+and a route (0.1.3): `ready`, `needs_info` (with a reply draft for the
+reporter) or `dev` (a person decides first), with the reasons.
 
 The first card from the GIF, as text:
 
@@ -43,28 +45,39 @@ $ uv run cofabriq triage 11 --repo philippmossier/local-ai-chat-playground
 ✓ GitHub     #11 unchanged since the last fetch
 ✓ embedding  up to date
 ✓ search     10 earlier issues, 5 docs
-✓ LLM        card fields + duplicate verdict, 2 calls, 4.3 s
-✓ checks     component on the list, quote found in #1
+✓ LLM        card fields + duplicate verdict, 2 calls, 3.3 s
+✓ checks     component on the list, quote found in #1, 1 info missing
 
 philippmossier/local-ai-chat-playground#11 (open)
   https://github.com/philippmossier/local-ai-chat-playground/issues/11
-  Refreshing the tab during a model download restarts the download instead of preserving its progress.
+  Refreshing the tab during a model download restarts the download from the beginning.
   type          bug
   severity      medium
   component     models
-  repro         1. Start downloading a model.
-                2. Refresh the tab while the download is in progress.
-  missing       Which model were you downloading?
+  repro         1. Refresh the tab while the model is downloading.
+  missing       version
+  questions     Which model were you downloading?
+                What app version or commit were you using?
   duplicate     duplicate_of #1
                 "After the reload the progress bar started again at 0% and it downloaded everything again."
+  route         dev
+                possible duplicate of #1: confirm first
+                missing version: the version of the app, library or tool the problem occurs in
+  reply draft   Thanks for the report! To look into it, we need:
+
+                - the version you are on
+                - Which model were you downloading?
+                - What app version or commit were you using?
   related issues (similarity)
                 0.65  #1
                 0.44  #5
                 0.43  #7
+                0.41  #4
+                0.34  #2
   related docs (similarity)
                 0.41  docs/REVIEW-GUIDE.md#Review guide > Known weak spots (where to look for bugs)
                 0.40  docs/adr/0005-local-storage-for-chats-cache-storage-for-models.md#5. Chats in localStorage, ...
-  run           $0.0003, 4.3 s, gpt-6-luna
+  run           $0.0004, 3.3 s, gpt-6-luna
 ```
 
 How a card is made: if the issue is new or changed on GitHub, it is fetched
@@ -79,8 +92,17 @@ repaired. So an injected instruction in an issue can at worst produce a
 misleading summary, never a wrong component, an invented duplicate or a
 write to GitHub. Where the two calls contradict each other (typed
 `feature`, but a duplicate of a bug), the card lists the conflict and keeps
-both reads: which one is wrong is unknown. The same card is served as the
-`triage` MCP tool.
+both reads: which one is wrong is unknown.
+
+The route is plain code over the checked card. `dev` when a person has to
+decide first (a possible duplicate, a feature request, a question, a
+conflict, critical severity, no component). Otherwise `needs_info` when the
+reporter has to add something: a required item of a bug report (steps,
+what happened, version, environment) has no quote that occurs verbatim in
+the issue, or the model marks one of its questions as blocking. Otherwise
+`ready`: complete and unambiguous, not yet small (size and blast radius
+need the 0.2 map). The reply draft is printed, never posted. The same card
+is served as the `triage` MCP tool.
 
 ## Numbers
 
@@ -156,9 +178,34 @@ regression matched to the original feature request). That hand check was
 an LLM's judgement plus a spot check, and the vscode set above corrected
 it: on provable labels, the precision is about 0.5, not 0.8.
 
+**Missing info, microsoft/vscode (0.1.3).** Does the card ask for more
+exactly when a maintainer did? Positive: the maintainers labelled the
+report `info-needed`. Negative: a `bug` fixed by a merged PR or a commit
+that never carried that label (label history checked on GitHub). Both sides
+filed through vscode's issue template (user reports, not team notes) with
+an unedited body. 200 + 200 per split; the method was chosen on 2023-2024
+and scored once on a held-out 2022 split.
+
+| Needs info, vscode, held-out 2022 (n = 400) | Flagged | Precision | Recall |
+| ------------------------------------------- | ------- | --------- | ------ |
+| the model asks any question (0.1.2 card)    | 217     | 0.733     | 0.795  |
+| required items without a verified quote     | 61      | 0.787     | 0.240  |
+| questions the model marks blocking          | 70      | 0.871     | 0.305  |
+| **route `needs_info` (either of the two)**  | 94      | 0.787     | 0.370  |
+
+What it says: when the card routes to `needs_info`, a maintainer asked too
+in about 4 of 5 cases, but it catches only about a third of the reports
+maintainers asked about. Most maintainer asks are issue-specific ("a gif
+would help", "does it happen on Insiders", "share a repo I can test
+with"), which no checklist knows; the model's questions catch most of them
+but also fire on 41% of bugs that were fixed as written, so they stay on
+the card as questions, not as a route. On the dev split, blocking
+precision was 0.868: the judgement held on unseen data. $0.0003 and 3.5 s
+per issue.
+
 Triage card, on the [playground](https://github.com/philippmossier/local-ai-chat-playground)
 (24 seeded issues with 4 duplicate pairs and 4 injection attempts), three
-runs of 0.1.1: type 22 to 24/24, component 23 to 24/24, duplicates 3 to
+runs of 0.1.1 (one run of 0.1.3: 24/24, 24/24, 4/4, 0/4): type 22 to 24/24, component 23 to 24/24, duplicates 3 to
 4/4 (the miss is an `unsure` on the right issue) with no false
 `duplicate_of`, injections followed 0/4, $0.0003 and 3.8 s median per
 issue. When the card's type and the verdict disagree (typed `feature`, but
@@ -167,7 +214,8 @@ winner: 1 conflict in 3 runs, on a wrongly typed card. This is a
 sanity check, not a benchmark: the issues and their expected labels were
 written together. Type accuracy on messy real issues is still open.
 
-Reproduce: `cofabriq eval dedupe --repo <repo> [--verdict]` (the sets are
+Reproduce: `cofabriq eval readiness --repo microsoft/vscode [--test]`,
+`cofabriq eval dedupe --repo <repo> [--verdict]` (the sets are
 committed in `evals/`; vscode needs `fetch-issues --repo microsoft/vscode
 --created 2022-01-01..2024-12-31` first, about an hour) and
 `cofabriq eval triage --repo philippmossier/local-ai-chat-playground`.
@@ -255,6 +303,9 @@ Development: `make check` runs ruff, pyright (strict) and pytest.
 - [x] **0.1.2:** a dedupe eval set with provable labels on both sides
       (microsoft/vscode: duplicates named by a maintainer action,
       non-duplicates closed by a merged PR or commit)
+- [x] **0.1.3:** readiness route (`ready`, `needs_info`, `dev`) with
+      verified required info, a blocking judgement and a reply draft;
+      missing-info eval on vscode's `info-needed` label, held-out split
 - [ ] **0.2: repo map + planning mode (read-only).** Components, files,
       co-change, PRs, issues and decisions in Neo4j; `impact` of an issue or
       a plan. Number: predicted vs actually touched components

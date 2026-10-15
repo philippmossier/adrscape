@@ -22,3 +22,19 @@ window = ["2023-01-01", "2024-12-31"]
 duplicate_label = "*duplicate"
 negatives = "closed_by_change"
 sample = 200
+
+# Missing-info eval rules (0.1.3), fixed before scoring. Positive: the
+# maintainers labelled the report `info-needed`. Negative: a `bug` closed as
+# completed by a merged PR or a commit that never carried `info-needed`
+# (label history checked on GitHub), so someone could act on it as written.
+# Both sides: filed through the issue reporter template (user reports, not
+# team notes) and with an unedited body (the text the maintainer saw).
+# Dev split 2023-2024 (methods compared, errors read); test split 2022,
+# scored once with the chosen method.
+[readiness]
+window = ["2023-01-01", "2024-12-31"]
+test_window = ["2022-01-01", "2022-12-31"]
+template = "Does this issue occur when all extensions are disabled"
+needs_info_label = "info-needed"
+bug_label = "bug"
+sample = 200

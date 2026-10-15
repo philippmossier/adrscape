@@ -1,5 +1,6 @@
 """Command-line entry point (`cofabriq ...`)."""
 
+from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
@@ -27,6 +28,7 @@ from cofabriq.context.ingest.source import LocalGitSource, Source
 from cofabriq.context.store import graph as kg
 from cofabriq.context.store import postgres
 from cofabriq.eval import dedupe
+from cofabriq.eval import readiness as readiness_eval
 from cofabriq.eval import triage as triage_eval
 from cofabriq.issues import triage as triage_mod
 from cofabriq.issues import vectors
@@ -252,6 +254,101 @@ def eval_dedupe(repo: str | None = None, verdict: bool = False) -> None:
         )
 
 
+def _infoset_path(repo: str, test: bool) -> Path:
+    suffix = "-test" if test else ""
+    return EVALS_DIR / f"readiness-{repo.replace('/', '-')}{suffix}.json"
+
+
+@eval_app.command("readiness-set")
+def readiness_set(
+    repo: str | None = None, test: bool = False, force: bool = False
+) -> None:
+    """Build and freeze the missing-info eval set: maintainer labels from the
+    fetched issues, each sampled issue's history checked on GitHub. `--test`
+    freezes the held-out split (`test_window`) instead."""
+    settings = get_settings()
+    target = _target_repo(repo)
+    path = _infoset_path(target, test)
+    if path.exists() and not force:
+        typer.echo(f"{path} is frozen; --force to rebuild it", err=True)
+        raise typer.Exit(code=1)
+    rules = readiness_eval.load_rules(settings.targets_dir, target)
+    if rules is None or settings.github_token is None:
+        typer.echo("needs [readiness] in the target file and GITHUB_TOKEN", err=True)
+        raise typer.Exit(code=1)
+    if test:
+        if rules.test_window is None:
+            typer.echo("no test_window in [readiness]", err=True)
+            raise typer.Exit(code=1)
+        rules = rules.model_copy(update={"window": rules.test_window})
+    pool = readiness_eval.pools(load_issues(settings.issues_dir, target), rules)
+    source = GitHubIssueSource(target, settings.github_token.get_secret_value())
+    infoset = readiness_eval.build(
+        target, pool, rules, source.history, frozen_at=datetime.now(UTC)
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(infoset.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    typer.echo(
+        f"{len(infoset.needs_info)} needs-info of {len(pool.needs_info)}, "
+        f"{len(infoset.complete)} complete of {len(pool.complete)} -> {path}"
+    )
+
+
+@eval_app.command("readiness")
+def eval_readiness(repo: str | None = None, test: bool = False) -> None:
+    """Does the card ask for more info exactly when a maintainer did? The
+    checked required items vs the model's own questions, on the frozen set.
+
+    Paid: one card call per issue, cached in the readiness dir. `--test`
+    scores the held-out split: once, after the method is chosen.
+    """
+    settings = get_settings()
+    target = _target_repo(repo)
+    infoset = readiness_eval.InfoSet.model_validate_json(
+        _infoset_path(target, test).read_bytes()
+    )
+    wanted = set(infoset.needs_info) | set(infoset.complete)
+    issues = {
+        i.number: i
+        for i in load_issues(settings.issues_dir, target)
+        if i.number in wanted
+    }
+    path = settings.readiness_dir / f"{target.replace('/', '-')}.json"
+    triager = triage_mod.OpenAITriager(_openai_key())
+    records = readiness_eval.run_fields(list(issues.values()), triager, path)
+    checked = {
+        n: bool(readiness_eval.missing(r, issues[n])) for n, r in records.items()
+    }
+    asked = {n: bool(r.fields.missing_info) for n, r in records.items()}
+    blocking = {
+        n: r.fields.blocking and bool(r.fields.missing_info) for n, r in records.items()
+    }
+    card = {n: checked[n] or blocking[n] for n in records}
+    typer.echo(
+        f"{target}, frozen {infoset.frozen_at:%Y-%m-%d}: "
+        f"{len(infoset.needs_info)} needs-info, {len(infoset.complete)} complete"
+    )
+    methods = [
+        ("model asks anything", asked),
+        ("checked items", checked),
+        ("blocking questions", blocking),
+        ("card (either)", card),
+    ]
+    for name, asks in methods:
+        s = readiness_eval.score(infoset, asks)
+        typer.echo(
+            f"  {name:<20} needs_info on {s.predicted}: precision "
+            f"{s.precision:.3f}, recall {s.recall:.3f}, F1 {s.f1:.3f}"
+        )
+    rows = list(records.values())
+    types = Counter(r.fields.type for r in rows)
+    typer.echo(f"  types: {dict(types.most_common())}")
+    typer.echo(
+        f"  per issue: ${fmean(r.cost_usd for r in rows):.5f} mean, "
+        f"{median(r.latency_ms for r in rows) / 1000:.1f} s median latency"
+    )
+
+
 @eval_app.command("triage")
 def eval_triage(
     repo: str | None = None, seed: Path = Path("playground/seed.toml")
@@ -381,6 +478,8 @@ def _checks(card: triage_mod.TriageCard) -> str:
         parts.append(f"dropped {len(card.dropped)}")
     if card.conflicts:
         parts.append(f"{len(card.conflicts)} conflict")
+    if card.missing:
+        parts.append(f"{len(card.missing)} info missing")
     return ", ".join(parts) or "nothing to check"
 
 
@@ -444,8 +543,10 @@ def _render_card(out: Console, card: triage_mod.TriageCard) -> None:
     row("component", card.component or "-")
     for n, step in enumerate(card.repro_steps, 1):
         row("repro" if n == 1 else "", f"{n}. {step}", "default")
-    for q in card.missing_info:
-        row("missing", q, "default")
+    if card.missing:
+        row("missing", ", ".join(card.missing), "yellow")
+    for n, q in enumerate(card.missing_info):
+        row("questions" if n == 0 else "", q, "default")
     target = f" #{d.target}" if d.target else ""
     style = {"duplicate_of": "bold yellow", "unsure": "yellow", "related": "cyan"}.get(
         d.verdict, "dim"
@@ -453,6 +554,15 @@ def _render_card(out: Console, card: triage_mod.TriageCard) -> None:
     row("duplicate", f"{d.verdict}{target}", style)
     if d.evidence:
         row("", f'"{d.evidence}"', "italic")
+    ready = card.readiness
+    style = {"ready": "bold green", "needs_info": "bold yellow"}.get(
+        ready.route, "bold"
+    )
+    row("route", ready.route, style)
+    for reason in ready.reasons:
+        row("", reason, "default")
+    for n, line in enumerate((card.reply or "").splitlines()):
+        row("reply draft" if n == 0 else "", line, "italic")
     flush()
     # Two separate searches (issues, doc sections); scores are cosine
     # similarity, not probabilities.

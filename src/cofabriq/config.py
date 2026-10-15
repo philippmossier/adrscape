@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     issues_dir: Path = Path("data/issues")
     verdicts_dir: Path = Path("data/verdicts")
+    readiness_dir: Path = Path("data/readiness")
     targets_dir: Path = Path("targets")
     target_repo: str | None = None
     github_token: SecretStr | None = None
