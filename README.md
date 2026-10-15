@@ -2,16 +2,21 @@
 
 An agentic software factory that devs use as a tool, not a review queue for them.
 
-Most "AI software factory" pipelines turn issues into pull requests and leave
-humans reviewing all day. cofabriq takes a different line. **Small,
-low-risk issues** (a type change, a typo, a dependency bump) go through
-**autopilot**: triage, implement on a branch, the repository's own CI as the
-gate, a separate reviewer, and a draft PR for the dev who triggered it.
-**Real features** stay with the dev, who plans them in **planning mode**: a
-map of the repository answers what a change touches, which decisions
-constrain it and what related work already exists.
+Small, low-risk issues go through **autopilot**: triaged, implemented, gated
+by the repository's own CI, reviewed and handed to the dev as a draft PR.
+Real features stay with the dev, who plans them in **planning mode** on a map
+of the repository. Today, in 0.1: issue in, triage card out.
 
-Three things it is built around:
+![cofabriq triage on two playground issues: a duplicate proven by a quote, then an issue with an injected instruction that the card ignores](docs/demo/triage.gif)
+
+## Why it is built this way
+
+Most "AI software factory" pipelines turn issues into pull requests and leave
+humans reviewing all day. cofabriq keeps the dev in charge: autopilot only
+takes issues that are small and low in blast radius (a type change, a typo, a
+dependency bump), and everything else is planned by the dev with the map
+answering what a change touches, which decisions constrain it and what
+related work already exists.
 
 - **A number per stage.** Every retrieval or agent change is measured on a real
   issue history ([open-webui](https://github.com/open-webui/open-webui), frozen
@@ -23,8 +28,6 @@ Three things it is built around:
 - **Devs own it.** One issue, one dev who triggers it, one branch, one PR that
   same dev reviews.
 
-Formerly `adrscape`. Why it changed: [ADR-006](docs/adr/006-re-scope-to-a-software-factory.md).
-
 ## Status
 
 **0.1: issue in, triage card out (read-only).** Point it at a GitHub
@@ -32,9 +35,7 @@ repository and an issue number, get a triage card: type, severity, component,
 a one-line summary, repro steps, questions for the reporter, a duplicate
 verdict with a quoted sentence as evidence, related issues and related docs.
 
-![cofabriq triage on two playground issues: a duplicate proven by a quote, then an issue with an injected instruction that the card ignores](docs/demo/triage.gif)
-
-The first card as text:
+The first card from the GIF, as text:
 
 ```text
 $ uv run cofabriq triage 11 --repo philippmossier/local-ai-chat-playground
@@ -45,6 +46,7 @@ $ uv run cofabriq triage 11 --repo philippmossier/local-ai-chat-playground
 ✓ checks     component on the list, quote found in #1
 
 philippmossier/local-ai-chat-playground#11 (open)
+  https://github.com/philippmossier/local-ai-chat-playground/issues/11
   Refreshing the tab during a model download restarts the download instead of preserving its progress.
   type          bug
   severity      medium
@@ -59,8 +61,8 @@ philippmossier/local-ai-chat-playground#11 (open)
                 0.44  #5
                 0.43  #7
   related docs (similarity)
-                0.41  local-ai-chat-playground/docs/REVIEW-GUIDE.md#Review guide > Known weak spots (where to look for bugs)
-                0.40  local-ai-chat-playground/docs/adr/0005-local-storage-for-chats-cache-storage-for-models.md#...
+                0.41  docs/REVIEW-GUIDE.md#Review guide > Known weak spots (where to look for bugs)
+                0.40  docs/adr/0005-local-storage-for-chats-cache-storage-for-models.md#5. Chats in localStorage, ...
   run           $0.0003, 4.3 s, gpt-6-luna
 ```
 
@@ -113,7 +115,7 @@ written together. Type accuracy on messy real issues is still open.
 Reproduce: `cofabriq eval dedupe` (the set is committed in `evals/`) and
 `cofabriq eval triage --repo philippmossier/local-ai-chat-playground`.
 
-### Underneath: the context layer (from adrscape)
+### Underneath: the context layer
 
 Ingests a repository's docs and manifests from local clones, embeds them
 into pgvector for semantic search (the "related docs" on a card), extracts
@@ -183,7 +185,7 @@ Development: `make check` runs ruff, pyright (strict) and pytest.
 
 ## Roadmap
 
-- [x] **Foundation (as adrscape, untagged):** context layer over a
+- [x] **Foundation (untagged):** context layer over a
       repository's docs: fetch, parse, chunk, embed, semantic search, LLM
       extraction, graph, MCP tools
 - [x] **0.1: issue in, triage card out (read-only).** GitHub issues as a

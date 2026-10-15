@@ -7,7 +7,7 @@ import pytest
 from rich.console import Console
 
 from cofabriq.cli import _show_card  # pyright: ignore[reportPrivateUsage]
-from cofabriq.issues.triage import triage
+from cofabriq.issues.triage import RelatedDoc, triage
 from cofabriq.issues.verdict import Answer
 from cofabriq.steps import Steps
 from tests.test_triage import FakeJudge, FakeTriager, context, fields
@@ -59,3 +59,21 @@ def test_card_prints_markup_in_issue_text_literally(
     _show_card(card)
 
     assert hostile in capsys.readouterr().out
+
+
+def test_card_drops_the_clone_prefix_from_doc_sources(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    card = triage(
+        context(),
+        FakeTriager(fields()),
+        FakeJudge(Answer(verdict="none", target=None, evidence="")),
+    )
+    clone = card.issue.repo.split("/")[1]
+    doc = RelatedDoc(source=f"{clone}/docs/adr/0001-x.md#Decision", score=0.5)
+
+    _show_card(card.model_copy(update={"related_docs": [doc]}))
+
+    out = capsys.readouterr().out
+    assert "0.50  docs/adr/0001-x.md#Decision" in out
+    assert f"{clone}/docs" not in out

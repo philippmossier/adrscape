@@ -11,7 +11,9 @@ import psycopg
 import typer
 from neo4j import Driver, GraphDatabase
 from rich.console import Console
-from rich.markup import escape
+from rich.padding import Padding
+from rich.table import Table
+from rich.text import Text
 
 from cofabriq.config import get_settings
 from cofabriq.context.ingest.chunk import chunk_docs
@@ -367,17 +369,41 @@ def triage(number: int, repo: str | None = None, json: bool = False) -> None:
 
 
 def _show_card(card: triage_mod.TriageCard) -> None:
-    """The card for a human. Issue text is untrusted: every value is escaped,
-    so `[red]` in an issue body prints as text, not as rich markup."""
-    out = Console(highlight=False, soft_wrap=True)
+    """The card for a human: a label column and a value column, long values
+    wrapped at word boundaries under their value. Issue and LLM text goes in as
+    `Text`, which rich never parses as markup (`[red]` in an issue body prints
+    as text). Piped, lines are not wrapped at all."""
+    out = Console(highlight=False)
+    if out.is_terminal:
+        _render_card(out, card)
+        return
+    # Piped: no wrapping, and no grid padding at the end of lines.
+    wide = Console(highlight=False, width=10_000)
+    with wide.capture() as captured:
+        _render_card(wide, card)
+    typer.echo("\n".join(line.rstrip() for line in captured.get().splitlines()))
+
+
+def _render_card(out: Console, card: triage_mod.TriageCard) -> None:
     i, d, r = card.issue, card.duplicate, card.run
+    rows: list[tuple[str, Text]] = []
 
     def row(label: str, value: str, style: str = "bold") -> None:
-        out.print(f"  [dim]{label:<13}[/] [{style}]{escape(value)}[/]")
+        rows.append((label, Text(value, style=style)))
+
+    def flush() -> None:
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="dim", width=13, no_wrap=True)
+        grid.add_column()
+        for label, value in rows:
+            grid.add_row(label, value)
+        out.print(Padding(grid, (0, 0, 0, 2), expand=False))
+        rows.clear()
 
     out.print()
-    out.print(f"[bold]{escape(i.repo)}#{i.number}[/] ({i.state})  [dim]{i.url}[/]")
-    out.print(f"  {escape(card.summary)}")
+    out.print(Text.assemble((f"{i.repo}#{i.number}", "bold"), f" ({i.state})"))
+    out.print(Padding(Text(i.url, style="dim"), (0, 0, 0, 2), expand=False))
+    out.print(Padding(Text(card.summary), (0, 0, 0, 2), expand=False))
     row("type", card.type)
     if card.severity:
         row("severity", card.severity)
@@ -391,21 +417,30 @@ def _show_card(card: triage_mod.TriageCard) -> None:
     row("duplicate", f"{d.verdict}{target}", style)
     if d.evidence:
         row("", f'"{d.evidence}"', "italic")
+    flush()
     # Two separate searches (issues, doc sections); scores are cosine
     # similarity, not probabilities.
-    out.print("  [dim]related issues (similarity)[/]")
+    out.print(Text("  related issues (similarity)", style="dim"))
     for x in card.related_issues:
-        out.print(f"  {'':<13} {x.score:.2f}  #{x.number}")
+        row("", f"{x.score:.2f}  #{x.number}", "default")
     if not card.related_issues:
-        out.print(f"  {'':<13} -")
-    out.print("  [dim]related docs (similarity)[/]")
+        row("", "-", "default")
+    flush()
+    out.print(Text("  related docs (similarity)", style="dim"))
+    clone = i.repo.split("/")[1] + "/"  # docs are keyed by the clone's folder
     for doc in card.related_docs:
-        out.print(f"  {'':<13} {doc.score:.2f}  {escape(doc.source)}")
+        source = doc.source.removeprefix(clone)
+        # A long heading trail is cut at the edge, not wrapped.
+        rows.append(
+            ("", Text(f"{doc.score:.2f}  {source}", no_wrap=True, overflow="ellipsis"))
+        )
     if not card.related_docs:
-        out.print(f"  {'':<13} -")
+        row("", "-", "default")
+    flush()
     for reason in card.dropped:
         row("dropped", reason, "red")
     row("run", f"${r.cost_usd:.4f}, {r.latency_ms / 1000:.1f} s, {r.model}", "dim")
+    flush()
 
 
 @app.command()
