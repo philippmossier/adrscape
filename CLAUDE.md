@@ -4,11 +4,11 @@ A software factory devs use as a tool, pointed at any GitHub repo. Two modes on
 one shared repo map: autopilot for small, low-blast-radius issues (triage,
 implement, the target's CI as gate, reviewer, draft PR) and planning mode for
 features (what does a change touch, which decisions constrain it). Formerly
-`adrscape`; the v0 context layer (docs ingest, search, extraction, graph, MCP)
+`adrscape`; its context layer (docs ingest, search, extraction, graph, MCP)
 carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
-Roadmap: v1 triage (read-only) -> v2 repo map + planning mode (read-only) ->
-v3 autopilot -> v4 review. Current: v1 (step 3 of 4 done).
+Roadmap: 0.1 triage (read-only) -> 0.2 repo map + planning mode (read-only) ->
+0.3 autopilot -> 0.4 review. Current: 0.1 released (v0.1.0); 0.2 not planned yet.
 
 ## Commands
 
@@ -22,20 +22,20 @@ v3 autopilot -> v4 review. Current: v1 (step 3 of 4 done).
 - `uv run cofabriq graph` / `decisions [--project]` / `affected <repo:path>`: load `extracted.json` into Neo4j, query decisions in force and affected projects
 - `uv run cofabriq fetch-issues` / `embed-issues`: issues of `TARGET_REPO` into `data/issues/` (needs `GITHUB_TOKEN`, read-only), title + body into pgvector
 - `uv run cofabriq eval dedupe-set` / `eval dedupe`: freeze the duplicate eval set to `evals/` (once; `--force` rebuilds), print recall@k and the threshold baseline (strict and cluster)
-- `uv run cofabriq triage <n> [--repo] [--json]`: triage card for a fetched and embedded issue (two LLM calls: card fields, duplicate verdict)
+- `uv run cofabriq triage <n> [--repo] [--json]`: triage card for one issue (two LLM calls: card fields, duplicate verdict); fetches and embeds that issue first if it is new or changed on GitHub (`fetch.py` keeps the `fetch-issues` cursor in `cursor.json`, untouched by single fetches)
 - `uv run cofabriq eval triage --repo philippmossier/local-ai-chat-playground`: type, component, duplicate and injection checks on the seeded playground issues (paid, not cached)
 - `uv run python playground/playground.py seed` / `reset --yes`: seed or wipe-and-reseed the demo playground via `gh` (your login; the repo is hard-coded)
-- `uv run cofabriq mcp`: serve `search`, `decisions`, `affected` and (with `TARGET_REPO` set) `triage` as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
+- `uv run cofabriq mcp`: serve `search`, `decisions`, `affected` and `triage` (optional `repo`, default `TARGET_REPO`) as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
 
 ## Layout
 
 - `src/cofabriq/config.py`: typed settings from env / `.env` (pydantic-settings)
 - `src/cofabriq/cli.py`: typer CLI, entry point `cofabriq`
-- `src/cofabriq/context/`: the context layer from v0
-  - `domain.py`: the ADR domain schema the LLM fills (third seam; replaced by the repo map in v2)
+- `src/cofabriq/context/`: the context layer from adrscape
+  - `domain.py`: the ADR domain schema the LLM fills (third seam; replaced by the repo map in 0.2)
   - `ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed, extract (`Extractor` protocol)
   - `store/`: `postgres.py` (vectors), `graph.py` (Neo4j)
-- `src/cofabriq/issues/`: v1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest), `verdict.py` (checked duplicate verdict), `triage.py` (the triage card schema, checks and assembly)
+- `src/cofabriq/issues/`: 0.1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest), `verdict.py` (checked duplicate verdict), `triage.py` (the triage card schema, checks and assembly)
 - `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`, `triage.py`)
 - `targets/<owner>-<name>.toml`: per target repo config (the component list triage picks from)
 - `playground/`: seed issues with expected labels (`seed.toml`) and the seed/reset script for the demo repo
@@ -50,7 +50,7 @@ v3 autopilot -> v4 review. Current: v1 (step 3 of 4 done).
   Don't generalise beyond them until a second domain exists.
 - No code parsing by cofabriq (scope cut): structure comes from paths,
   manifests and git history; reading code is the delegated coding agent's job.
-- Read-only towards GitHub through v2. From v3: local trigger, dry run by
+- Read-only towards GitHub through 0.2. From 0.3: local trigger, dry run by
   default, `--apply` writes one branch and a draft PR only (scoped token).
 - Ingested documents and issue text are untrusted input.
 - Install only what the current step needs.

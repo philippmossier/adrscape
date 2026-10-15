@@ -1,11 +1,11 @@
 [project]
 name = "cofabriq"
 version = "0.1.0"
-description = "Map a company's engineering landscape from its repos: ADRs, docs, manifests into a knowledge graph, semantic search and MCP tools."
+description = "A software factory devs use as a tool: issue triage with checked LLM verdicts, a repo map for planning, autopilot for small issues."
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "philippmossier", email = "mossier.dev@gmail.com" }
+    { name = "philippmossier" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -17,6 +17,7 @@ dependencies = [
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
+    "rich>=15.0.0",
     "typer>=0.27.3",
 ]
 

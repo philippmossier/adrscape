@@ -13,38 +13,26 @@ API = "https://api.github.com"
 PAGE_SIZE = 50
 MAX_RETRIES = 5
 
-# One request per page: issues, their first N comments and duplicate marks.
-# REST would need two more calls per issue (comments, timeline), about 14k
-# calls for open-webui against a budget of 5000 per hour.
-QUERY = """
-query($owner: String!, $name: String!, $since: DateTime, $after: String,
-      $pageSize: Int!, $comments: Int!) {
-  rateLimit { cost remaining resetAt }
-  repository(owner: $owner, name: $name) {
-    issues(first: $pageSize, after: $after, filterBy: {since: $since},
-           orderBy: {field: UPDATED_AT, direction: ASC}) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        number title body state stateReason createdAt updatedAt closedAt
-        author { __typename login }
-        labels(first: 20) { nodes { name } }
-        comments(first: $comments) {
-          totalCount
-          nodes { author { __typename login } body createdAt }
-        }
-        timelineItems(first: 20,
-                      itemTypes: [MARKED_AS_DUPLICATE_EVENT,
-                                  UNMARKED_AS_DUPLICATE_EVENT]) {
-          nodes {
-            __typename
-            ... on MarkedAsDuplicateEvent {
-              canonical { ...Target } duplicate { ...Target }
-            }
-            ... on UnmarkedAsDuplicateEvent {
-              canonical { ...Target } duplicate { ...Target }
-            }
-          }
-        }
+# The fields cofabriq keeps per issue: its first N comments and duplicate marks.
+FIELDS = """
+fragment IssueFields on Issue {
+  number title body state stateReason createdAt updatedAt closedAt
+  author { __typename login }
+  labels(first: 20) { nodes { name } }
+  comments(first: $comments) {
+    totalCount
+    nodes { author { __typename login } body createdAt }
+  }
+  timelineItems(first: 20,
+                itemTypes: [MARKED_AS_DUPLICATE_EVENT,
+                            UNMARKED_AS_DUPLICATE_EVENT]) {
+    nodes {
+      __typename
+      ... on MarkedAsDuplicateEvent {
+        canonical { ...Target } duplicate { ...Target }
+      }
+      ... on UnmarkedAsDuplicateEvent {
+        canonical { ...Target } duplicate { ...Target }
       }
     }
   }
@@ -55,6 +43,39 @@ fragment Target on IssueOrPullRequest {
   ... on PullRequest { number repository { nameWithOwner } }
 }
 """
+
+# One request per page of issues. REST would need two more calls per issue
+# (comments, timeline), about 14k calls for open-webui against a budget of
+# 5000 per hour.
+QUERY = (
+    """
+query($owner: String!, $name: String!, $since: DateTime, $after: String,
+      $pageSize: Int!, $comments: Int!) {
+  rateLimit { cost remaining resetAt }
+  repository(owner: $owner, name: $name) {
+    issues(first: $pageSize, after: $after, filterBy: {since: $since},
+           orderBy: {field: UPDATED_AT, direction: ASC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes { ...IssueFields }
+    }
+  }
+}
+"""
+    + FIELDS
+)
+
+# One issue by number (`triage` refreshing the issue it is asked about).
+ISSUE_QUERY = (
+    """
+query($owner: String!, $name: String!, $number: Int!, $comments: Int!) {
+  rateLimit { cost remaining resetAt }
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) { ...IssueFields }
+  }
+}
+"""
+    + FIELDS
+)
 
 type Json = dict[str, Any]
 
@@ -111,7 +132,7 @@ class GitHubIssueSource:
             "comments": self._comments,
         }
         while True:
-            data = self._query(variables)
+            data = self._query(QUERY, variables)
             if data["repository"] is None:
                 raise GitHubError(f"repository not found: {self._repo}")
             page = data["repository"]["issues"]
@@ -122,10 +143,32 @@ class GitHubIssueSource:
             variables["after"] = page["pageInfo"]["endCursor"]
             self._wait_for_budget(data["rateLimit"])
 
-    def _query(self, variables: Json) -> Json:
+    def issue(self, number: int) -> Issue | None:
+        """One issue by number; None if it doesn't exist, is a pull request or
+        isn't visible to the token."""
+        owner, name = self._repo.split("/")
+        variables: Json = {
+            "owner": owner,
+            "name": name,
+            "number": number,
+            "comments": self._comments,
+        }
+        try:
+            data = self._query(ISSUE_QUERY, variables)
+        except GitHubError as exc:
+            # GraphQL answers an unknown number with a NOT_FOUND error.
+            if "Could not resolve to an Issue" in str(exc):
+                return None
+            raise
+        if data["repository"] is None:
+            raise GitHubError(f"repository not found: {self._repo}")
+        node = data["repository"]["issue"]
+        return _issue(self._repo, node) if node else None
+
+    def _query(self, query: str, variables: Json) -> Json:
         for attempt in range(MAX_RETRIES):
             resp = self._client.post(
-                "/graphql", json={"query": QUERY, "variables": variables}
+                "/graphql", json={"query": query, "variables": variables}
             )
             wait = self._retry_after(resp, attempt)
             if wait is not None:

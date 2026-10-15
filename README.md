@@ -1,6 +1,6 @@
 # cofabriq
 
-A software factory that devs use as a tool, not a review queue for them.
+An agentic software factory that devs use as a tool, not a review queue for them.
 
 Most "AI software factory" pipelines turn issues into pull requests and leave
 humans reviewing all day. cofabriq takes a different line. **Small,
@@ -16,7 +16,7 @@ Three things it is built around:
 - **A number per stage.** Every retrieval or agent change is measured on a real
   issue history ([open-webui](https://github.com/open-webui/open-webui), frozen
   snapshot). The numbers live in this README.
-- **Safe by default on public repos.** Read-only until v3. After that, writes
+- **Safe by default on public repos.** Read-only until 0.3. After that, writes
   happen only on a local trigger by the dev, as a dry run unless `--apply` is
   passed. They are limited to one branch and a draft PR by a scoped token, not
   by a prompt. Issue text is untrusted input.
@@ -27,20 +27,98 @@ Formerly `adrscape`. Why it changed: [ADR-006](docs/adr/006-re-scope-to-a-softwa
 
 ## Status
 
-**v1 in progress: issue in, triage card out.** What runs today is the context
-layer from v0. It ingests a repository's docs and manifests from local clones,
-chunks and embeds them into pgvector for semantic search, extracts entities with
-an LLM into a Neo4j graph, and serves it all as MCP tools. Issue ingestion,
-dedupe and the triage card are next.
+**0.1: issue in, triage card out (read-only).** Point it at a GitHub
+repository and an issue number, get a triage card: type, severity, component,
+a one-line summary, repro steps, questions for the reporter, a duplicate
+verdict with a quoted sentence as evidence, related issues and related docs.
 
-```bash
-uv run cofabriq fetch ../repo-a ../repo-b   # READMEs, docs/, ADRs, manifests -> data/raw
-uv run cofabriq embed                       # chunk + embed into pgvector, unchanged docs skipped
-uv run cofabriq search "how are models loaded"
-uv run cofabriq extract                     # LLM fills the domain schema -> data/extracted.json
-uv run cofabriq graph                       # load the extraction into Neo4j
-uv run cofabriq mcp                         # search + graph queries as MCP tools (stdio)
+![cofabriq triage on two playground issues: a duplicate proven by a quote, then an issue with an injected instruction that the card ignores](docs/demo/triage.gif)
+
+The first card as text:
+
+```text
+$ uv run cofabriq triage 11 --repo philippmossier/local-ai-chat-playground
+✓ GitHub     #11 unchanged since the last fetch
+✓ embedding  up to date
+✓ search     10 earlier issues, 5 docs
+✓ LLM        card fields + duplicate verdict, 2 calls, 4.3 s
+✓ checks     component on the list, quote found in #1
+
+philippmossier/local-ai-chat-playground#11 (open)
+  Refreshing the tab during a model download restarts the download instead of preserving its progress.
+  type          bug
+  severity      medium
+  component     models
+  repro         1. Start downloading a model.
+                2. Refresh the tab while the download is in progress.
+  missing       Which model were you downloading?
+  duplicate     duplicate_of #1
+                "After the reload the progress bar started again at 0% and it downloaded everything again."
+  related issues (similarity)
+                0.65  #1
+                0.44  #5
+                0.43  #7
+  related docs (similarity)
+                0.41  local-ai-chat-playground/docs/REVIEW-GUIDE.md#Review guide > Known weak spots (where to look for bugs)
+                0.40  local-ai-chat-playground/docs/adr/0005-local-storage-for-chats-cache-storage-for-models.md#...
+  run           $0.0003, 4.3 s, gpt-6-luna
 ```
+
+How a card is made: if the issue is new or changed on GitHub, it is fetched
+and embedded first. Its vector finds the nearest earlier issues and docs in
+pgvector. Two LLM calls run in parallel, one for the card fields and
+one for the duplicate verdict over the top 10 candidates. Plain code then
+checks what the model returned: the component must be on the repository's
+list (`targets/<owner>-<name>.toml`), severity is kept only on bugs, the
+duplicate target must be one of the candidates and its quote must occur
+verbatim in that issue. Anything that fails a check is dropped, not
+repaired. So an injected instruction in an issue can at worst produce a
+misleading summary, never a wrong component, an invented duplicate or a
+write to GitHub. The same card is served as the `triage` MCP tool.
+
+## Numbers
+
+Measured on [open-webui](https://github.com/open-webui/open-webui)'s issue
+history (10,302 issues, snapshot frozen 2026-10-13). Ground truth is what
+its maintainers marked: 155 duplicate pairs from GitHub's duplicate marks
+and human "duplicate of #N" comments, plus 155 non-duplicates. Each query
+only sees issues filed before it, and only comments written before it.
+
+| Dedupe, open-webui (n = 310)                 | Embedding threshold | LLM verdict |
+| -------------------------------------------- | ------------------- | ----------- |
+| `duplicate_of` precision                     | 0.250               | 0.346       |
+| `duplicate_of` recall                        | 0.310               | 0.342       |
+| precision / recall, any issue of the cluster | 0.292 / 0.361       | 0.399 / 0.394 |
+| cost / median latency per issue              | embedding only      | $0.00066 / 2.2 s |
+
+Retrieval: the original is in the vector top 5 for 49.7% of duplicates
+(57.4% counting another duplicate of the same issue). The verdict can only
+pick from the top 10, so retrieval caps it.
+
+What the numbers say: on real issues, deduplication is far from solved, and
+the LLM verdict beats similar-text matching by a modest margin, not a
+large one. Most of its errors are same-symptom, different-cause calls (the
+same pip error on two Python versions). A blind hand check of 12 LLM
+misses found 3 real duplicates the maintainers never marked, so the
+labels undercount a little. That is why the verdict only suggests: the
+dev decides.
+
+Triage card, on the [playground](https://github.com/philippmossier/local-ai-chat-playground)
+(24 seeded issues with 4 duplicate pairs and 4 injection attempts): type
+24/24, component 24/24, duplicates 4/4 with no false `duplicate_of`,
+injections followed 0/4, $0.0003 and 4.4 s median per issue. This is a
+sanity check, not a benchmark: the issues and their expected labels were
+written together. Type accuracy on messy real issues is still open.
+
+Reproduce: `cofabriq eval dedupe` (the set is committed in `evals/`) and
+`cofabriq eval triage --repo philippmossier/local-ai-chat-playground`.
+
+### Underneath: the context layer (from adrscape)
+
+Ingests a repository's docs and manifests from local clones, embeds them
+into pgvector for semantic search (the "related docs" on a card), extracts
+entities with an LLM into a Neo4j graph and serves search and graph queries
+as MCP tools. The 0.2 repo map grows out of it.
 
 ## How it fits together (target)
 
@@ -65,36 +143,65 @@ graph LR
 What cofabriq builds: triage, the repo map, the implement-and-fix loop, the
 reviewer and blast-radius routing. What it consumes: the target repository's CI,
 and a coding agent for implementation. What it does not read itself: source
-code. The map gets its structure from file paths, manifests and git history.
+code. The map gets its structure from file paths, manifests and git history;
+the coding agent reads the code when it plans and implements a change.
 
 ## Quickstart
 
-Requires [uv](https://docs.astral.sh/uv/) and Podman (or Docker) with compose.
+Requires [uv](https://docs.astral.sh/uv/), Podman (or Docker) with compose,
+an OpenAI key and a fine-grained GitHub token with "Public repositories
+(read-only)" and no other permission. cofabriq never writes to GitHub.
 
 ```bash
-make setup               # install deps, create .env (set OPENAI_API_KEY)
+make setup               # install deps, create .env (set OPENAI_API_KEY, GITHUB_TOKEN)
 make up                  # Postgres + pgvector (5433), Neo4j (7474, 7687), test Neo4j (7688)
 uv run cofabriq health   # OK per service
-make check               # ruff, pyright (strict), pytest
 ```
+
+Triage an issue on the playground (a copy of a small local-first chat app
+with seeded issues; it resets regularly, so numbers may shift):
+
+```bash
+REPO=philippmossier/local-ai-chat-playground
+git clone https://github.com/$REPO ../local-ai-chat-playground
+uv run cofabriq fetch-issues --repo $REPO    # all issues -> data/issues/ (read-only, incremental)
+uv run cofabriq embed-issues --repo $REPO    # title + body into pgvector: the duplicate candidates
+uv run cofabriq fetch ../local-ai-chat-playground && uv run cofabriq embed   # docs, for "related docs"
+uv run cofabriq triage 11 --repo $REPO       # add --json for the raw card
+```
+
+The `fetch` and `embed` commands are a one-time sync (rerun them to pick up
+new issues). After that, `triage <n>` is the only command: an issue filed a minute ago is
+fetched and embedded on the spot.
+
+Any other public repository works the same way. Add a
+`targets/<owner>-<name>.toml` with its components first: the card picks
+its component from that list. `uv run cofabriq mcp` serves the same card
+to Claude Code (registered in `.mcp.json`).
+
+Development: `make check` runs ruff, pyright (strict) and pytest.
 
 ## Roadmap
 
-- [x] **v0 (as adrscape):** context layer over a repository's docs: fetch,
-      parse, chunk, embed, semantic search, LLM extraction, graph, MCP tools
-- [ ] **v1: issue in, triage card out (read-only).** GitHub issues as a
+- [x] **Foundation (as adrscape, untagged):** context layer over a
+      repository's docs: fetch, parse, chunk, embed, semantic search, LLM
+      extraction, graph, MCP tools
+- [x] **0.1: issue in, triage card out (read-only).** GitHub issues as a
       source, two-stage dedupe (vector candidates, LLM verdict with checked
       evidence), triage card, `triage` CLI and MCP tool. Numbers: recall@5,
       verdict precision and recall against an embedding baseline, cost and
       latency per issue
-- [ ] **v2: repo map + planning mode (read-only).** Components, files,
+- [ ] **0.2: repo map + planning mode (read-only).** Components, files,
       co-change, PRs, issues and decisions in Neo4j; `impact` of an issue or
       a plan. Number: predicted vs actually touched components
-- [ ] **v3: autopilot.** Refinement, size and blast-radius gate, delegated
+- [ ] **0.3: autopilot.** Refinement, size and blast-radius gate, delegated
       implementation, the target's CI as the gate, fix loop with escalation,
       draft PR
-- [ ] **v4: review.** Reviewer with its own context, blast-radius routing
+- [ ] **0.4: review.** Reviewer with its own context, blast-radius routing
       (human review vs auto-merge eligible), run metrics
+
+Milestones are 0.x releases, tagged in git: the API and the CLI may still
+change. 1.0 comes when someone besides me relies on it.
 
 Decisions are recorded in `docs/adr/` as they are made.
 

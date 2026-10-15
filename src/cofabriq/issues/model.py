@@ -65,7 +65,8 @@ class Issue(BaseModel):
 
 
 class IssueSource(Protocol):
-    """Yields a repo's issues updated at or after `since`, oldest update first.
+    """Yields a repo's issues updated at or after `since`, oldest update first,
+    or one issue by number.
 
     Ascending order makes every prefix of the stream a valid resume point: the
     last `updated_at` seen is the next `since`.
@@ -75,3 +76,5 @@ class IssueSource(Protocol):
     def repo(self) -> str: ...
 
     def issues(self, since: datetime | None = None) -> Iterator[Issue]: ...
+
+    def issue(self, number: int) -> Issue | None: ...

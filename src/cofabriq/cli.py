@@ -3,12 +3,15 @@
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from statistics import fmean, median
 
 import psycopg
 import typer
 from neo4j import Driver, GraphDatabase
+from rich.console import Console
+from rich.markup import escape
 
 from cofabriq.config import get_settings
 from cofabriq.context.ingest.chunk import chunk_docs
@@ -30,6 +33,7 @@ from cofabriq.issues.fetch import fetch_issues, load_issues
 from cofabriq.issues.github import GitHubIssueSource
 from cofabriq.issues.model import Issue, check_repo
 from cofabriq.mcp_server import build as build_mcp
+from cofabriq.steps import Steps
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Measure retrieval and verdicts.")
@@ -233,7 +237,7 @@ def eval_triage(
     matched = triage_eval.match(items, load_issues(settings.issues_dir, target))
     with postgres.connect(settings.postgres_dsn) as conn:
         conn.autocommit = True  # one connection shared by the threads, reads only
-        run = _triage_fn(conn, target)
+        run = partial(_triage_fn(conn, refresh=False), target)
         with ThreadPoolExecutor(max_workers=4) as pool:
             found = pool.map(run, [i.number for i in matched.values()])
             cards = dict(zip(matched, found, strict=True))
@@ -278,29 +282,81 @@ def _verdicts(
 
 
 def _triage_fn(
-    conn: postgres.Conn, repo: str
-) -> Callable[[int], triage_mod.TriageCard]:
-    """Gather from the local stores, then both LLM calls."""
+    conn: postgres.Conn, *, refresh: bool, steps: Steps | None = None
+) -> Callable[[str, int], triage_mod.TriageCard]:
+    """(repo, number) -> card: optionally refresh the issue from GitHub, then
+    gather from the local stores and make both LLM calls.
+
+    `refresh` needs `GITHUB_TOKEN`; without one the store is used as it is.
+    The eval passes False: it scores the issues as fetched. `steps` reports
+    each stage (CLI); None stays silent (MCP, eval).
+    """
     settings = get_settings()
     key = _openai_key()
     triager, judge = triage_mod.OpenAITriager(key), verdict_mod.OpenAIJudge(key)
+    embed = openai_embedder(key)
+    token = settings.github_token if refresh else None
+    show = steps or Steps(None)
 
-    def run(number: int) -> triage_mod.TriageCard:
-        ctx = triage_mod.gather(
-            conn, settings.issues_dir, settings.targets_dir, repo, number
-        )
-        return triage_mod.triage(ctx, triager, judge)
+    def run(repo: str, number: int) -> triage_mod.TriageCard:
+        if token is not None:
+            source = GitHubIssueSource(
+                repo, token.get_secret_value(), comments=settings.issue_comments
+            )
+            with show.step("GitHub", f"checking #{number}") as done:
+                got = triage_mod.refresh_issue(source, settings.issues_dir, number)
+                done(_fetched(number, got))
+            if got is not None:
+                with show.step("embedding", f"embedding #{number}") as done:
+                    changed = triage_mod.refresh_vector(conn, got[0], embed)
+                    done(f"embedded #{number}" if changed else "up to date")
+        elif refresh:
+            show.note("GitHub", "skipped: no GITHUB_TOKEN, local copy", ok=False)
+        with show.step("search", "nearest earlier issues and docs") as done:
+            ctx = triage_mod.gather(
+                conn, settings.issues_dir, settings.targets_dir, repo, number
+            )
+            done(f"{len(ctx.candidates)} earlier issues, {len(ctx.related_docs)} docs")
+        with show.step("LLM", "card fields + duplicate verdict") as done:
+            card = triage_mod.triage(ctx, triager, judge)
+            seconds = card.run.latency_ms / 1000
+            done(f"card fields + duplicate verdict, 2 calls, {seconds:.1f} s")
+        show.note("checks", _checks(card), ok=not card.dropped)
+        return card
 
     return run
 
 
+def _fetched(number: int, got: tuple[object, str] | None) -> str:
+    if got is None:
+        return f"#{number} not on GitHub (or a pull request), local copy"
+    return {
+        "new": f"fetched #{number} (new)",
+        "changed": f"fetched #{number} (changed on GitHub)",
+    }.get(got[1], f"#{number} unchanged since the last fetch")
+
+
+def _checks(card: triage_mod.TriageCard) -> str:
+    """What the plain-code checks after the calls let through or dropped."""
+    parts: list[str] = []
+    if card.component:
+        parts.append("component on the list")
+    if card.duplicate.target is not None:
+        parts.append(f"quote found in #{card.duplicate.target}")
+    if card.dropped:
+        parts.append(f"dropped {len(card.dropped)}")
+    return ", ".join(parts) or "nothing to check"
+
+
 @app.command()
 def triage(number: int, repo: str | None = None, json: bool = False) -> None:
-    """Triage card for one fetched and embedded issue (two LLM calls)."""
+    """Triage card for one issue (two LLM calls). Fetches and embeds the issue
+    first if it is new or changed on GitHub (needs GITHUB_TOKEN)."""
     target = _target_repo(repo)
     with postgres.connect(get_settings().postgres_dsn) as conn:
         try:
-            card = _triage_fn(conn, target)(number)
+            steps = Steps(Console(stderr=True, soft_wrap=True))
+            card = _triage_fn(conn, refresh=True, steps=steps)(target, number)
         except triage_mod.NotReady as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=1) from exc
@@ -311,29 +367,45 @@ def triage(number: int, repo: str | None = None, json: bool = False) -> None:
 
 
 def _show_card(card: triage_mod.TriageCard) -> None:
+    """The card for a human. Issue text is untrusted: every value is escaped,
+    so `[red]` in an issue body prints as text, not as rich markup."""
+    out = Console(highlight=False, soft_wrap=True)
     i, d, r = card.issue, card.duplicate, card.run
-    typer.echo(f"{i.repo}#{i.number} ({i.state})  {i.url}")
-    typer.echo(f"  {card.summary}")
-    severity = f" / {card.severity}" if card.severity else ""
-    typer.echo(f"  type          {card.type}{severity}")
-    typer.echo(f"  component     {card.component or '-'}")
+
+    def row(label: str, value: str, style: str = "bold") -> None:
+        out.print(f"  [dim]{label:<13}[/] [{style}]{escape(value)}[/]")
+
+    out.print()
+    out.print(f"[bold]{escape(i.repo)}#{i.number}[/] ({i.state})  [dim]{i.url}[/]")
+    out.print(f"  {escape(card.summary)}")
+    row("type", card.type)
+    if card.severity:
+        row("severity", card.severity)
+    row("component", card.component or "-")
     for n, step in enumerate(card.repro_steps, 1):
-        typer.echo(f"  {'repro' if n == 1 else '':<13} {n}. {step}")
+        row("repro" if n == 1 else "", f"{n}. {step}", "default")
     for q in card.missing_info:
-        typer.echo(f"  {'missing':<13} {q}")
+        row("missing", q, "default")
     target = f" #{d.target}" if d.target else ""
-    typer.echo(f"  duplicate     {d.verdict}{target}")
+    style = {"duplicate_of": "bold yellow", "related": "cyan"}.get(d.verdict, "dim")
+    row("duplicate", f"{d.verdict}{target}", style)
     if d.evidence:
-        typer.echo(f'  {"":<13} "{d.evidence}"')
-    related = ", ".join(f"#{x.number} {x.score:.2f}" for x in card.related_issues)
-    typer.echo(f"  related       {related or '-'}")
+        row("", f'"{d.evidence}"', "italic")
+    # Two separate searches (issues, doc sections); scores are cosine
+    # similarity, not probabilities.
+    out.print("  [dim]related issues (similarity)[/]")
+    for x in card.related_issues:
+        out.print(f"  {'':<13} {x.score:.2f}  #{x.number}")
+    if not card.related_issues:
+        out.print(f"  {'':<13} -")
+    out.print("  [dim]related docs (similarity)[/]")
     for doc in card.related_docs:
-        typer.echo(f"  {'docs':<13} {doc.score:.2f} {doc.source}")
+        out.print(f"  {'':<13} {doc.score:.2f}  {escape(doc.source)}")
+    if not card.related_docs:
+        out.print(f"  {'':<13} -")
     for reason in card.dropped:
-        typer.echo(f"  dropped       {reason}")
-    typer.echo(
-        f"  run           ${r.cost_usd:.4f}, {r.latency_ms / 1000:.1f} s, {r.model}"
-    )
+        row("dropped", reason, "red")
+    row("run", f"${r.cost_usd:.4f}, {r.latency_ms / 1000:.1f} s, {r.model}", "dim")
 
 
 @app.command()
@@ -492,8 +564,9 @@ def mcp() -> None:
     """Serve search and the graph queries as MCP tools over stdio."""
     embed = _embedder()
     with postgres.connect(get_settings().postgres_dsn) as conn, _graph() as driver:
-        # Read-only and long-lived: one transaction per query, none left open.
+        # Long-lived: one transaction per query, none left open. Writes only
+        # when `triage` refreshes an issue (its own transaction).
         conn.autocommit = True
         target = get_settings().target_repo
-        run = _triage_fn(conn, check_repo(target)) if target else None
-        build_mcp(embed, conn, driver, run).run("stdio")
+        run = _triage_fn(conn, refresh=True)
+        build_mcp(embed, conn, driver, run, default_repo=target).run("stdio")

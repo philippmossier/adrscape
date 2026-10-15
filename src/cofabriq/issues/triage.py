@@ -19,10 +19,11 @@ from typing import Literal, Protocol
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from cofabriq.context.ingest.embed import Embed
 from cofabriq.context.store import postgres
 from cofabriq.issues import vectors, verdict
-from cofabriq.issues.fetch import load_issue
-from cofabriq.issues.model import Issue
+from cofabriq.issues.fetch import fetch_one, load_issue
+from cofabriq.issues.model import Issue, IssueSource
 from cofabriq.issues.verdict import PRICE_IN, PRICE_OUT, Candidate, Usage
 
 MODEL = verdict.MODEL
@@ -200,11 +201,39 @@ class NotReady(LookupError):
     """The issue is not fetched or not embedded yet; the message says which."""
 
 
+type Fetched = Literal["new", "changed", "unchanged"]
+
+
+def refresh_issue(
+    source: IssueSource, issues_dir: Path, number: int
+) -> tuple[Issue, Fetched] | None:
+    """Fetch one issue and store it if it is new or changed on the source, so
+    `triage <n>` works on an issue filed a minute ago without running
+    `fetch-issues` first. None if the source doesn't have it.
+
+    Only this issue: the candidates come from the store as it is, so issues
+    filed since the last `fetch-issues` are not among them.
+    """
+    before = load_issue(issues_dir, source.repo, number)
+    issue = fetch_one(source, issues_dir, number)
+    if issue is None:
+        return None
+    if before is None:
+        return issue, "new"
+    return issue, "unchanged" if before == issue else "changed"
+
+
+def refresh_vector(conn: postgres.Conn, issue: Issue, embed: Embed) -> bool:
+    """Embed the issue if its title or body changed; True if it did."""
+    return vectors.sync(conn, [issue], embed).embedded > 0
+
+
 def gather(
     conn: postgres.Conn, issues_dir: Path, targets_dir: Path, repo: str, number: int
 ) -> Context:
     """Issue, candidates and related docs from the local stores. Nothing is
-    fetched from GitHub here: run `fetch-issues` and `embed-issues` first.
+    fetched from GitHub here: `refresh_issue` and `refresh_vector` (or
+    `fetch-issues` and `embed-issues`) first.
 
     Candidates are earlier issues only (a duplicate points back in time).
     Docs are searched with the issue's stored vector, in the repo's clone

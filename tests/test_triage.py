@@ -17,6 +17,8 @@ from cofabriq.issues.triage import (
     gather,
     load_components,
     prompt,
+    refresh_issue,
+    refresh_vector,
     related_docs,
     triage,
 )
@@ -186,4 +188,55 @@ def test_gather_says_what_is_missing(conn: postgres.Conn, tmp_path: Path) -> Non
         gather(conn, tmp_path, tmp_path, REPO, 9)
     _store(tmp_path, NEW)
     with pytest.raises(NotReady, match="not embedded"):
+        gather(conn, tmp_path, tmp_path, REPO, 9)
+
+
+class OneSource:
+    """IssueSource with one issue, as GitHub has it now."""
+
+    def __init__(self, issue: Issue | None) -> None:
+        self.repo = REPO
+        self._issue = issue
+
+    def issues(self, since: object = None) -> Iterator[Issue]:
+        return iter([self._issue] if self._issue else [])
+
+    def issue(self, number: int) -> Issue | None:
+        return self._issue if self._issue and self._issue.number == number else None
+
+
+def test_refresh_fetches_and_embeds_a_new_issue_then_gather_works(
+    conn: postgres.Conn, tmp_path: Path
+) -> None:
+    embed = FakeEmbedder()
+    _store(tmp_path, OLD)
+    vectors.sync(conn, [OLD], embed)
+
+    assert refresh_issue(OneSource(NEW), tmp_path, 9) == (NEW, "new")
+    assert refresh_vector(conn, NEW, embed)
+    ctx = gather(conn, tmp_path, tmp_path, REPO, 9)
+
+    assert ctx.issue == NEW
+    assert [c.number for c in ctx.candidates] == [1]
+    assert refresh_issue(OneSource(NEW), tmp_path, 9) == (NEW, "unchanged")
+    assert not refresh_vector(conn, NEW, embed)
+
+
+def test_refresh_reembeds_an_edited_issue(conn: postgres.Conn, tmp_path: Path) -> None:
+    embed = FakeEmbedder()
+    refresh_issue(OneSource(NEW), tmp_path, 9)
+    refresh_vector(conn, NEW, embed)
+    later = NEW.updated_at.replace(year=2027)
+    edited = NEW.model_copy(update={"body": "Edited on GitHub.", "updated_at": later})
+
+    assert refresh_issue(OneSource(edited), tmp_path, 9) == (edited, "changed")
+    assert refresh_vector(conn, edited, embed)
+    assert gather(conn, tmp_path, tmp_path, REPO, 9).issue.body == "Edited on GitHub."
+
+
+def test_refresh_leaves_the_store_alone_if_the_source_lacks_the_issue(
+    conn: postgres.Conn, tmp_path: Path
+) -> None:
+    assert refresh_issue(OneSource(None), tmp_path, 9) is None
+    with pytest.raises(NotReady, match="not fetched"):
         gather(conn, tmp_path, tmp_path, REPO, 9)

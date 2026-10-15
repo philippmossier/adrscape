@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 import pytest
 
-from cofabriq.issues.fetch import fetch_issues, load_index, load_issues
+from cofabriq.issues.fetch import fetch_issues, fetch_one, load_index, load_issues
 from cofabriq.issues.github import GitHubError, GitHubIssueSource
 from cofabriq.issues.model import Issue, IssueRef, check_repo
 
@@ -169,6 +169,9 @@ class ListSource:
         self.asked.append(since)
         return iter(i for i in self._issues if since is None or i.updated_at >= since)
 
+    def issue(self, number: int) -> Issue | None:
+        return next((i for i in self._issues if i.number == number), None)
+
 
 def recorded_issues() -> list[Issue]:
     handler, _ = replay(
@@ -203,3 +206,68 @@ def test_second_fetch_asks_since_newest_and_skips_unchanged(tmp_path: Path) -> N
     assert (report.written, report.unchanged) == (1, 1)
     [stored] = [i for i in load_issues(tmp_path, REPO) if i.number == edited.number]
     assert stored.title == "edited"
+
+
+def one(node: dict[str, Any] | None) -> httpx.Response:
+    """A recorded page node as the answer to `ISSUE_QUERY`."""
+    data = {"rateLimit": page(1)["data"]["rateLimit"], "repository": {"issue": node}}
+    return httpx.Response(200, json={"data": data})
+
+
+def test_fetches_one_issue_by_number() -> None:
+    node = page(1)["data"]["repository"]["issues"]["nodes"][0]
+    handler, sent = replay(one(node), one(None))
+    src = source(handler, [])
+
+    found = src.issue(node["number"])
+    missing = src.issue(1)  # a pull request or a hidden issue: null
+
+    assert found is not None and found.number == node["number"]
+    assert found == recorded_issues()[0]
+    assert missing is None
+    assert sent[0]["variables"]["number"] == node["number"]
+    assert "issue(number: $number)" in sent[0]["query"]
+
+
+def test_unknown_issue_number_is_none() -> None:
+    message = "Could not resolve to an Issue with the number of 99999."
+    error = {"type": "NOT_FOUND", "message": message}
+    handler, _ = replay(httpx.Response(200, json={"data": None, "errors": [error]}))
+
+    assert source(handler, []).issue(99999) is None
+
+
+def test_fetch_one_stores_a_new_issue_and_keeps_the_cursor(tmp_path: Path) -> None:
+    issues = sorted(recorded_issues(), key=lambda i: i.updated_at)
+    *older, newest = issues
+    fetch_issues(ListSource(older), tmp_path)
+    cursor = max(i.updated_at for i in older)
+
+    stored = fetch_one(ListSource(issues), tmp_path, newest.number)
+
+    assert stored == newest
+    assert newest.number in load_index(tmp_path / "open-webui" / "open-webui")
+    again = ListSource(issues)
+    fetch_issues(again, tmp_path)
+    assert again.asked == [cursor]  # not the single issue's newer date
+
+
+def test_fetch_one_on_a_store_without_cursor_keeps_the_old_resume_point(
+    tmp_path: Path,
+) -> None:
+    issues = sorted(recorded_issues(), key=lambda i: i.updated_at)
+    *older, newest = issues
+    fetch_issues(ListSource(older), tmp_path)
+    repo_dir = tmp_path / "open-webui" / "open-webui"
+    (repo_dir / "cursor.json").unlink()  # a store from before the cursor
+
+    fetch_one(ListSource(issues), tmp_path, newest.number)
+    again = ListSource(issues)
+    fetch_issues(again, tmp_path)
+
+    assert again.asked == [max(i.updated_at for i in older)]
+
+
+def test_fetch_one_returns_none_for_an_unknown_issue(tmp_path: Path) -> None:
+    assert fetch_one(ListSource([]), tmp_path, 7) is None
+    assert not (tmp_path / "open-webui").exists()
