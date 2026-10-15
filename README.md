@@ -76,7 +76,10 @@ duplicate target must be one of the candidates and its quote must occur
 verbatim in that issue. Anything that fails a check is dropped, not
 repaired. So an injected instruction in an issue can at worst produce a
 misleading summary, never a wrong component, an invented duplicate or a
-write to GitHub. The same card is served as the `triage` MCP tool.
+write to GitHub. Where the two calls contradict each other (typed
+`feature`, but a duplicate of a bug), the card lists the conflict and keeps
+both reads: which one is wrong is unknown. The same card is served as the
+`triage` MCP tool.
 
 ## Numbers
 
@@ -86,29 +89,43 @@ its maintainers marked: 155 duplicate pairs from GitHub's duplicate marks
 and human "duplicate of #N" comments, plus 155 non-duplicates. Each query
 only sees issues filed before it, and only comments written before it.
 
-| Dedupe, open-webui (n = 310)                 | Embedding threshold | LLM verdict |
-| -------------------------------------------- | ------------------- | ----------- |
-| `duplicate_of` precision                     | 0.250               | 0.346       |
-| `duplicate_of` recall                        | 0.310               | 0.342       |
-| precision / recall, any issue of the cluster | 0.292 / 0.361       | 0.399 / 0.394 |
-| cost / median latency per issue              | embedding only      | $0.00066 / 2.2 s |
+| Dedupe, open-webui (n = 310)                 | Embedding threshold | LLM verdict 0.1.0 | LLM verdict 0.1.1 |
+| -------------------------------------------- | ------------------- | ----------------- | ----------------- |
+| `duplicate_of` precision                     | 0.250               | 0.346             | 0.434             |
+| `duplicate_of` recall                        | 0.310               | 0.342             | 0.342             |
+| precision / recall, any issue of the cluster | 0.292 / 0.361       | 0.399 / 0.394     | 0.484 / 0.381     |
+| `unsure` (abstained), of which right         | -                   | -                 | 62, 4             |
+| cost / median latency per issue              | embedding only      | $0.00066 / 2.2 s  | $0.00069 / 3.6 s  |
+
+0.1.1 lets the verdict abstain (`unsure`: likely the same problem, but the
+text can't confirm it) and asks for the same cause, not just the same
+symptom. Both changed in one prompt version, so the gain isn't attributable
+to abstention alone.
 
 Retrieval: the original is in the vector top 5 for 49.7% of duplicates
 (57.4% counting another duplicate of the same issue). The verdict can only
 pick from the top 10, so retrieval caps it.
 
-What the numbers say: on real issues, deduplication is far from solved, and
-the LLM verdict beats similar-text matching by a modest margin, not a
-large one. Most of its errors are same-symptom, different-cause calls (the
-same pip error on two Python versions). A blind hand check of 12 LLM
-misses found 3 real duplicates the maintainers never marked, so the
-labels undercount a little. That is why the verdict only suggests: the
-dev decides.
+What the numbers say: the precision above is a lower bound, and the labels
+are the bigger problem. A non-duplicate here only means "nobody marked it":
+only 4 of the 155 were closed by a linked PR, so almost none is proven. A
+hand check of the 63 claims the labels call wrong found 40 real duplicates
+the maintainers never marked (or marked against another issue of the same
+problem), 13 real errors and 10 unclear. The real errors are same-symptom,
+different-cause calls (the same pip error on two Python versions, a
+regression matched to the original feature request). That hand check is a
+judgement, not a measurement, so it is not in the table; the next step is
+an eval set whose labels are provable on both sides (0.1.2). Either way
+the verdict only suggests: the dev decides.
 
 Triage card, on the [playground](https://github.com/philippmossier/local-ai-chat-playground)
-(24 seeded issues with 4 duplicate pairs and 4 injection attempts): type
-24/24, component 24/24, duplicates 4/4 with no false `duplicate_of`,
-injections followed 0/4, $0.0003 and 4.4 s median per issue. This is a
+(24 seeded issues with 4 duplicate pairs and 4 injection attempts), three
+runs of 0.1.1: type 22 to 24/24, component 23 to 24/24, duplicates 3 to
+4/4 (the miss is an `unsure` on the right issue) with no false
+`duplicate_of`, injections followed 0/4, $0.0003 and 3.8 s median per
+issue. When the card's type and the verdict disagree (typed `feature`, but
+a duplicate of a bug), the card lists a conflict instead of picking a
+winner: 1 conflict in 3 runs, on a wrongly typed card. This is a
 sanity check, not a benchmark: the issues and their expected labels were
 written together. Type accuracy on messy real issues is still open.
 
@@ -193,6 +210,11 @@ Development: `make check` runs ruff, pyright (strict) and pytest.
       evidence), triage card, `triage` CLI and MCP tool. Numbers: recall@5,
       verdict precision and recall against an embedding baseline, cost and
       latency per issue
+- [x] **0.1.1:** the verdict may abstain (`unsure`), card-verdict conflicts
+      are flagged
+- [ ] **0.1.2:** a dedupe eval set with provable labels on both sides
+      (duplicates named by a maintainer action, non-duplicates closed by a
+      merged PR or commit)
 - [ ] **0.2: repo map + planning mode (read-only).** Components, files,
       co-change, PRs, issues and decisions in Neo4j; `impact` of an issue or
       a plan. Number: predicted vs actually touched components

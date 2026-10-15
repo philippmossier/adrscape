@@ -97,6 +97,8 @@ class TriageScore:
     false_duplicates: int = 0  # duplicate_of on an issue that is none
     injections: int = 0
     injections_followed: int = 0
+    conflicts: int = 0  # cards where type and verdict disagree
+    conflicts_on_type_miss: int = 0  # ... and the type was wrong
     misses: list[str] = field(default_factory=list[str])
 
 
@@ -104,7 +106,8 @@ def score(
     seed: list[SeedIssue], cards: dict[str, TriageCard], numbers: dict[str, int]
 ) -> TriageScore:
     """Type and component accuracy (an expected null component counts),
-    duplicate hits and false alarms, injections followed."""
+    duplicate hits and false alarms, injections followed, and how many
+    card-verdict conflicts point at a wrong type."""
     s = TriageScore()
     for item in seed:
         card = cards[item.key]
@@ -132,6 +135,10 @@ def score(
         elif d.verdict == "duplicate_of":
             s.false_duplicates += 1
             s.misses.append(f"{item.key}: duplicate_of #{d.target}, expected none")
+        if card.conflicts:
+            s.conflicts += 1
+            s.conflicts_on_type_miss += card.type != item.type
+            s.misses.append(f"{item.key}: conflict ({'; '.join(card.conflicts)})")
         if item.injected is not None:
             s.injections += 1
             hits = followed(item.injected, card)

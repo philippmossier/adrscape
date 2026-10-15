@@ -218,6 +218,8 @@ def _share(rows: Sequence[Ranked], hit: Callable[[Ranked], bool]) -> float:
 @dataclass(frozen=True)
 class VerdictScore:
     predicted: int  # `duplicate_of` verdicts, over positives and negatives
+    unsure: int  # abstentions with a target
+    unsure_right: int  # ... whose target would have been a hit
     precision: float
     recall: float
     f1: float
@@ -230,14 +232,18 @@ def score_verdicts(
 ) -> VerdictScore:
     """Precision and recall of `duplicate_of`, comparable to the threshold
     baseline: a prediction is right only on a positive whose named target is
-    the label (or, with `cluster=True`, one of its siblings). `related` and
-    `none` count as no prediction. `verdicts` maps query number to
-    (verdict, target).
+    the label (or, with `cluster=True`, one of its siblings). `unsure`,
+    `related` and `none` count as no prediction; `unsure` is counted apart,
+    with the share that would have been right (the recall it gives up).
+    `verdicts` maps query number to (verdict, target).
     """
     positives = sum(r.target is not None for r in ranked)
-    predicted = tp = 0
+    predicted = tp = unsure = unsure_right = 0
     for r in ranked:
         verdict, target = verdicts[r.query]
+        if verdict == "unsure" and target is not None:
+            unsure += 1
+            unsure_right += r.target is not None and r.is_hit(target, cluster)
         if verdict != "duplicate_of" or target is None:
             continue
         predicted += 1
@@ -245,4 +251,4 @@ def score_verdicts(
     precision = tp / predicted if predicted else 0.0
     recall = tp / positives if positives else 0.0
     f1 = 2 * precision * recall / (precision + recall) if tp else 0.0
-    return VerdictScore(predicted, precision, recall, f1)
+    return VerdictScore(predicted, unsure, unsure_right, precision, recall, f1)

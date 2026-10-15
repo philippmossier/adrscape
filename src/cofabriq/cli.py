@@ -213,6 +213,7 @@ def eval_dedupe(repo: str | None = None, verdict: bool = False) -> None:
             typer.echo(
                 f"  {'':<8} LLM verdict ({v.predicted} duplicate_of): "
                 f"precision {v.precision:.3f}, recall {v.recall:.3f}, F1 {v.f1:.3f}"
+                f"; {v.unsure} unsure, {v.unsure_right} of them right"
             )
     if records is not None:
         rows = list(records.values())
@@ -254,6 +255,10 @@ def eval_triage(
         f"{s.false_duplicates} false duplicate_of"
     )
     typer.echo(f"  injections followed {s.injections_followed}/{s.injections}")
+    typer.echo(
+        f"  conflicts  {s.conflicts} card-verdict, "
+        f"{s.conflicts_on_type_miss} on a wrong type"
+    )
     typer.echo(
         f"  per issue: ${fmean(r.cost_usd for r in runs):.5f} mean, "
         f"{median(r.latency_ms for r in runs) / 1000:.1f} s median latency"
@@ -323,7 +328,7 @@ def _triage_fn(
             card = triage_mod.triage(ctx, triager, judge)
             seconds = card.run.latency_ms / 1000
             done(f"card fields + duplicate verdict, 2 calls, {seconds:.1f} s")
-        show.note("checks", _checks(card), ok=not card.dropped)
+        show.note("checks", _checks(card), ok=not (card.dropped or card.conflicts))
         return card
 
     return run
@@ -347,6 +352,8 @@ def _checks(card: triage_mod.TriageCard) -> str:
         parts.append(f"quote found in #{card.duplicate.target}")
     if card.dropped:
         parts.append(f"dropped {len(card.dropped)}")
+    if card.conflicts:
+        parts.append(f"{len(card.conflicts)} conflict")
     return ", ".join(parts) or "nothing to check"
 
 
@@ -413,7 +420,9 @@ def _render_card(out: Console, card: triage_mod.TriageCard) -> None:
     for q in card.missing_info:
         row("missing", q, "default")
     target = f" #{d.target}" if d.target else ""
-    style = {"duplicate_of": "bold yellow", "related": "cyan"}.get(d.verdict, "dim")
+    style = {"duplicate_of": "bold yellow", "unsure": "yellow", "related": "cyan"}.get(
+        d.verdict, "dim"
+    )
     row("duplicate", f"{d.verdict}{target}", style)
     if d.evidence:
         row("", f'"{d.evidence}"', "italic")
@@ -439,6 +448,8 @@ def _render_card(out: Console, card: triage_mod.TriageCard) -> None:
     flush()
     for reason in card.dropped:
         row("dropped", reason, "red")
+    for reason in card.conflicts:
+        row("conflict", reason, "yellow")
     row("run", f"${r.cost_usd:.4f}, {r.latency_ms / 1000:.1f} s, {r.model}", "dim")
     flush()
 

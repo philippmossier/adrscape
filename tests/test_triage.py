@@ -10,10 +10,13 @@ from cofabriq.issues.fetch import issue_dir
 from cofabriq.issues.model import Issue
 from cofabriq.issues.triage import (
     Context,
+    Duplicate,
     Fields,
+    IssueType,
     NotReady,
     RelatedDoc,
     check,
+    conflicts,
     gather,
     load_components,
     prompt,
@@ -22,7 +25,7 @@ from cofabriq.issues.triage import (
     related_docs,
     triage,
 )
-from cofabriq.issues.verdict import Answer, Candidate, Usage
+from cofabriq.issues.verdict import Answer, Candidate, Kind, Problem, Usage
 from tests.test_dedupe import REPO, issue
 from tests.test_embed_store import FakeEmbedder, chunk
 
@@ -94,7 +97,9 @@ def test_check_keeps_valid_fields() -> None:
 
 
 def test_triage_assembles_both_calls() -> None:
-    answer = Answer(verdict="duplicate_of", target=1, evidence="starts over")
+    answer = Answer(
+        verdict="duplicate_of", target=1, evidence="starts over", problem=None
+    )
     clock = ticks()
 
     card = triage(
@@ -115,12 +120,53 @@ def test_triage_assembles_both_calls() -> None:
 
 
 def test_triage_rejects_an_unchecked_duplicate() -> None:
-    invented = Answer(verdict="duplicate_of", target=1, evidence="not in there")
+    invented = Answer(
+        verdict="duplicate_of", target=1, evidence="not in there", problem=None
+    )
 
     card = triage(context(), FakeTriager(fields()), FakeJudge(invented))
 
     assert (card.duplicate.verdict, card.duplicate.target) == ("none", None)
     assert card.dropped == ["duplicate_of -> #1: evidence not in the candidate"]
+
+
+@pytest.mark.parametrize(
+    ("type", "kind", "problem", "flagged"),
+    [
+        ("feature", "duplicate_of", "bug", True),  # #26: typed feature, dup of a bug
+        ("question", "duplicate_of", "bug", True),
+        ("bug", "duplicate_of", "request", True),
+        ("bug", "duplicate_of", "bug", False),
+        ("docs", "duplicate_of", "request", False),  # not broken on both sides
+        ("feature", "unsure", "bug", False),  # abstention claims nothing
+        ("feature", "related", "bug", False),
+    ],
+)
+def test_conflicts_compare_broken_or_not(
+    type: IssueType, kind: Kind, problem: Problem, flagged: bool
+) -> None:
+    dup = Duplicate(verdict=kind, target=1, evidence="x", problem=problem)
+
+    assert bool(conflicts(type, dup)) == flagged
+
+
+def test_triage_flags_a_conflict_and_keeps_both_reads() -> None:
+    answer = Answer(
+        verdict="duplicate_of", target=1, evidence="starts over", problem="bug"
+    )
+
+    card = triage(
+        context(), FakeTriager(fields(type="feature", severity=None)), FakeJudge(answer)
+    )
+
+    assert (card.type, card.duplicate.verdict, card.dropped) == (
+        "feature",
+        "duplicate_of",
+        [],
+    )
+    assert card.conflicts == [
+        "type feature, but duplicate_of #1, which the verdict reads as a bug"
+    ]
 
 
 def test_prompt_lists_components_and_hides_labels() -> None:

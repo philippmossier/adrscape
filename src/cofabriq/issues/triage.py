@@ -5,7 +5,9 @@ Two LLM calls run in parallel: the card fields here, the duplicate verdict in
 else on the card is deterministic: the issue from `data/issues/`, related
 issues and docs from pgvector. LLM output is checked like ADR-004 links: a
 component outside the configured list or a severity on a non-bug is dropped
-and recorded, never passed through.
+and recorded, never passed through. Where the two calls contradict each
+other, nothing is dropped (which read is wrong is unknown): the conflict is
+listed on the card for a human.
 """
 
 import time
@@ -24,7 +26,7 @@ from cofabriq.context.store import postgres
 from cofabriq.issues import vectors, verdict
 from cofabriq.issues.fetch import fetch_one, load_issue
 from cofabriq.issues.model import Issue, IssueSource
-from cofabriq.issues.verdict import PRICE_IN, PRICE_OUT, Candidate, Usage
+from cofabriq.issues.verdict import PRICE_IN, PRICE_OUT, Candidate, Problem, Usage
 
 MODEL = verdict.MODEL
 PROMPT_VERSION = "triage-v1"
@@ -136,6 +138,7 @@ class Duplicate(BaseModel):
     verdict: verdict.Kind
     target: int | None
     evidence: str
+    problem: Problem | None  # what the target reports, per the verdict
 
 
 class RelatedIssue(BaseModel):
@@ -167,6 +170,7 @@ class TriageCard(BaseModel):
     related_issues: list[RelatedIssue]
     related_docs: list[RelatedDoc]
     dropped: list[str]  # LLM output rejected by the checks, with the reason
+    conflicts: list[str]  # the two calls disagree; kept, flagged for a human
     run: Run
 
 
@@ -184,6 +188,20 @@ def check(fields: Fields, components: dict[str, str]) -> tuple[Fields, list[str]
     return fields.model_copy(
         update={"component": component, "severity": severity}
     ), dropped
+
+
+def conflicts(type: IssueType, duplicate: Duplicate) -> list[str]:
+    """Card and verdict read the issue independently. A duplicate reports
+    the same problem, so either both are bugs or neither is; anything else
+    means one of the two calls is wrong."""
+    if duplicate.verdict != "duplicate_of" or duplicate.problem is None:
+        return []
+    if (type == "bug") == (duplicate.problem == "bug"):
+        return []
+    return [
+        f"type {type}, but duplicate_of #{duplicate.target}, "
+        f"which the verdict reads as a {duplicate.problem}"
+    ]
 
 
 @dataclass(frozen=True)
@@ -280,6 +298,12 @@ def triage(
 
     fields, dropped = check(raw, ctx.components)
     record = verdict.check(ctx.issue, ctx.candidates, answer, v_usage)
+    duplicate = Duplicate(
+        verdict=record.verdict,
+        target=record.target,
+        evidence=record.evidence,
+        problem=record.problem,
+    )
     issue = ctx.issue
     return TriageCard(
         issue=IssueInfo(
@@ -295,12 +319,11 @@ def triage(
         summary=fields.summary,
         repro_steps=fields.repro_steps,
         missing_info=fields.missing_info,
-        duplicate=Duplicate(
-            verdict=record.verdict, target=record.target, evidence=record.evidence
-        ),
+        duplicate=duplicate,
         related_issues=ctx.related_issues,
         related_docs=ctx.related_docs,
         dropped=dropped + record.dropped,
+        conflicts=conflicts(fields.type, duplicate),
         run=Run(
             model=MODEL,
             prompt_version=f"{PROMPT_VERSION}+verdict/{verdict.VERSION}",

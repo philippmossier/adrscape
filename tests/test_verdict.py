@@ -51,6 +51,7 @@ def test_check_keeps_a_quoted_duplicate() -> None:
         verdict="duplicate_of",
         target=1,
         evidence="download starts over after refresh",  # across a line break
+        problem="bug",
     )
 
     record = check(NEW, candidates(), answer, USAGE)
@@ -63,19 +64,35 @@ def test_check_keeps_a_quoted_duplicate() -> None:
 @pytest.mark.parametrize(
     ("answer", "reason"),
     [
-        (Answer(verdict="duplicate_of", target=7, evidence="x"), "not a candidate"),
-        (Answer(verdict="duplicate_of", target=None, evidence="x"), "not a candidate"),
+        (
+            Answer(verdict="duplicate_of", target=7, evidence="x", problem=None),
+            "not a candidate",
+        ),
+        (
+            Answer(verdict="duplicate_of", target=None, evidence="x", problem=None),
+            "not a candidate",
+        ),
         # a quote from the query, not the target
         (
-            Answer(verdict="duplicate_of", target=1, evidence="Reloading the page"),
+            Answer(
+                verdict="duplicate_of",
+                target=1,
+                evidence="Reloading the page",
+                problem=None,
+            ),
             "evidence not in the candidate",
         ),
         # quote from the wrong candidate
         (
-            Answer(verdict="related", target=1, evidence="Colours are off"),
+            Answer(
+                verdict="related", target=1, evidence="Colours are off", problem=None
+            ),
             "evidence not in the candidate",
         ),
-        (Answer(verdict="duplicate_of", target=1, evidence=" "), "evidence not in"),
+        (
+            Answer(verdict="duplicate_of", target=1, evidence=" ", problem=None),
+            "evidence not in",
+        ),
     ],
 )
 def test_check_drops_unsupported_verdicts(answer: Answer, reason: str) -> None:
@@ -86,11 +103,31 @@ def test_check_drops_unsupported_verdicts(answer: Answer, reason: str) -> None:
 
 
 def test_check_clears_target_on_none() -> None:
-    answer = Answer(verdict="none", target=1, evidence="Download restarts")
+    answer = Answer(
+        verdict="none", target=1, evidence="Download restarts", problem=None
+    )
 
     record = check(NEW, candidates(), answer, USAGE)
 
     assert (record.target, record.evidence, record.dropped) == (None, "", [])
+
+
+def test_check_keeps_a_quoted_unsure_with_its_target() -> None:
+    answer = Answer(
+        verdict="unsure", target=1, evidence="Download restarts", problem="bug"
+    )
+
+    record = check(NEW, candidates(), answer, USAGE)
+
+    assert (record.verdict, record.target, record.problem) == ("unsure", 1, "bug")
+
+
+def test_check_drops_an_unquoted_unsure() -> None:
+    answer = Answer(verdict="unsure", target=2, evidence="restarts", problem="bug")
+
+    record = check(NEW, candidates(), answer, USAGE)
+
+    assert (record.verdict, record.target, record.problem) == ("none", None, None)
 
 
 class FakeJudge:
@@ -102,7 +139,9 @@ class FakeJudge:
     ) -> tuple[Answer, Usage]:
         self.calls.append(query.number)
         top = candidates[0]
-        answer = Answer(verdict="duplicate_of", target=top.number, evidence=top.title)
+        answer = Answer(
+            verdict="duplicate_of", target=top.number, evidence=top.title, problem=None
+        )
         return answer, USAGE
 
 

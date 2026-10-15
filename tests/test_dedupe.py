@@ -133,13 +133,17 @@ def test_score_verdicts_counts_only_duplicate_of() -> None:
         Ranked(10, 1, [(1, 0.9)]),  # right target
         Ranked(11, 2, [(7, 0.8)], frozenset({7})),  # names a sibling
         Ranked(12, 4, [(5, 0.6)]),  # says related: no prediction
+        Ranked(13, 3, [(3, 0.7)]),  # unsure on the right target: no prediction
         Ranked(20, None, [(6, 0.85)]),  # negative called a duplicate
+        Ranked(21, None, [(8, 0.8)]),  # unsure on a negative
     ]
     verdicts = {
         10: ("duplicate_of", 1),
         11: ("duplicate_of", 7),
         12: ("related", 5),
+        13: ("unsure", 3),
         20: ("duplicate_of", 6),
+        21: ("unsure", 8),
     }
 
     strict = score_verdicts(ranked, verdicts)
@@ -148,11 +152,12 @@ def test_score_verdicts_counts_only_duplicate_of() -> None:
     assert (strict.predicted, strict.precision, strict.recall) == (
         3,
         pytest.approx(1 / 3),
-        pytest.approx(1 / 3),
+        pytest.approx(1 / 4),
     )
+    assert (strict.unsure, strict.unsure_right) == (2, 1)
     assert (cluster.precision, cluster.recall) == (
         pytest.approx(2 / 3),
-        pytest.approx(2 / 3),
+        pytest.approx(2 / 4),
     )
 
 

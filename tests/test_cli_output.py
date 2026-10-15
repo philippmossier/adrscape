@@ -53,7 +53,7 @@ def test_card_prints_markup_in_issue_text_literally(
     card = triage(
         context(),
         FakeTriager(fields(summary=hostile)),
-        FakeJudge(Answer(verdict="none", target=None, evidence="")),
+        FakeJudge(Answer(verdict="none", target=None, evidence="", problem=None)),
     )
 
     _show_card(card)
@@ -67,7 +67,7 @@ def test_card_drops_the_clone_prefix_from_doc_sources(
     card = triage(
         context(),
         FakeTriager(fields()),
-        FakeJudge(Answer(verdict="none", target=None, evidence="")),
+        FakeJudge(Answer(verdict="none", target=None, evidence="", problem=None)),
     )
     clone = card.issue.repo.split("/")[1]
     doc = RelatedDoc(source=f"{clone}/docs/adr/0001-x.md#Decision", score=0.5)

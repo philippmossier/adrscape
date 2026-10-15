@@ -24,10 +24,11 @@ def card(**update: object) -> TriageCard:
         summary="Reload restarts the download.",
         repro_steps=[],
         missing_info=[],
-        duplicate=Duplicate(verdict="none", target=None, evidence=""),
+        duplicate=Duplicate(verdict="none", target=None, evidence="", problem=None),
         related_issues=[],
         related_docs=[],
         dropped=[],
+        conflicts=[],
         run=Run(model="m", prompt_version="p", cost_usd=0.001, latency_ms=1000),
     )
     return base.model_copy(update=update)
@@ -88,11 +89,15 @@ def test_score_counts_hits_misses_and_false_duplicates() -> None:
     numbers = {"model-download-reload": 1, "model-download-refresh": 11}
     cards = {
         "model-download-reload": card(
-            duplicate=Duplicate(verdict="duplicate_of", target=5, evidence="x")
+            duplicate=Duplicate(
+                verdict="duplicate_of", target=5, evidence="x", problem=None
+            )
         ),
         "model-download-refresh": card(
             component="inference",
-            duplicate=Duplicate(verdict="duplicate_of", target=1, evidence="x"),
+            duplicate=Duplicate(
+                verdict="duplicate_of", target=1, evidence="x", problem=None
+            ),
         ),
     }
 
@@ -104,3 +109,29 @@ def test_score_counts_hits_misses_and_false_duplicates() -> None:
         "model-download-reload: duplicate_of #5, expected none",
         "model-download-refresh: component inference, expected models",
     ]
+
+
+def test_score_counts_conflicts_and_whether_the_type_was_wrong() -> None:
+    seed = [
+        s
+        for s in load_seed(SEED)
+        if s.key in {"model-download-reload", "model-download-refresh"}
+    ]
+    numbers = {"model-download-reload": 1, "model-download-refresh": 11}
+    flagged = ["type feature, but duplicate_of #1, which the verdict reads as a bug"]
+    cards = {
+        "model-download-reload": card(),
+        "model-download-refresh": card(
+            type="feature",
+            severity=None,
+            duplicate=Duplicate(
+                verdict="duplicate_of", target=1, evidence="x", problem="bug"
+            ),
+            conflicts=flagged,
+        ),
+    }
+
+    s = score(seed, cards, numbers)
+
+    assert (s.conflicts, s.conflicts_on_type_miss) == (1, 1)
+    assert f"model-download-refresh: conflict ({flagged[0]})" in s.misses

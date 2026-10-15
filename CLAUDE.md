@@ -8,7 +8,9 @@ features (what does a change touch, which decisions constrain it). Formerly
 carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
 Roadmap: 0.1 triage (read-only) -> 0.2 repo map + planning mode (read-only) ->
-0.3 autopilot -> 0.4 review. Current: 0.1 released (v0.1.0); 0.2 not planned yet.
+0.3 autopilot -> 0.4 review. Current: v0.1.1 released (abstention,
+card-verdict conflicts); 0.1.2 next (dedupe eval set with provable labels);
+0.2 not planned yet.
 
 ## Commands
 
