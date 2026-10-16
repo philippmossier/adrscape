@@ -11,6 +11,7 @@ from statistics import fmean, median
 import psycopg
 import typer
 from neo4j import Driver, GraphDatabase
+from pydantic import TypeAdapter
 from rich.console import Console
 from rich.padding import Padding
 from rich.table import Table
@@ -30,13 +31,17 @@ from cofabriq.context.store import postgres
 from cofabriq.eval import dedupe
 from cofabriq.eval import impact as impact_eval
 from cofabriq.eval import readiness as readiness_eval
+from cofabriq.eval import refine as refine_eval
 from cofabriq.eval import triage as triage_eval
+from cofabriq.eval.bugs import load_bugs
 from cofabriq.issues import triage as triage_mod
 from cofabriq.issues import vectors
 from cofabriq.issues import verdict as verdict_mod
 from cofabriq.issues.fetch import fetch_created, fetch_issues, load_issue, load_issues
 from cofabriq.issues.github import GitHubIssueSource
 from cofabriq.issues.model import Issue, check_repo
+from cofabriq.loop import refine as refine_mod
+from cofabriq.loop.engine import AgentError, ClaudeCode
 from cofabriq.map import build as map_build_mod
 from cofabriq.map import components as components_mod
 from cofabriq.map import fixes as fixes_mod
@@ -838,6 +843,200 @@ def impact(
         typer.echo("  usually changes with them (blast radius):")
     for t in result.blast:
         typer.echo(f"  {t.score:>6.2f}  {t.component}")
+
+
+def _agent() -> ClaudeCode:
+    settings = get_settings()
+    if settings.anthropic_api_key is None:
+        typer.echo("ANTHROPIC_API_KEY is not set (see .env.example)", err=True)
+        raise typer.Exit(code=1)
+    return ClaudeCode(
+        api_key=settings.anthropic_api_key.get_secret_value(),
+        model=settings.agent_model,
+        effort=settings.agent_effort,
+    )
+
+
+@app.command()
+def refine(number: int, repo: str | None = None, json: bool = False) -> None:
+    """Spec for one issue from a read-only agent reading the code (paid, one
+    agent run). Updates the clone in data/clones/ first and fetches the issue
+    if it is new or changed on GitHub (needs GITHUB_TOKEN)."""
+    settings = get_settings()
+    target = _target_repo(repo)
+    agent = _agent()
+    steps = Steps(Console(stderr=True, soft_wrap=True))
+    clone = settings.clones_dir / target.replace("/", "-")
+    with steps.step("clone", f"updating {clone}") as done:
+        commit = refine_mod.update_clone(target, clone)
+        done(f"{clone} at {commit[:7]}")
+    issue = _refresh_issue(target, number, steps)
+    if issue is None:
+        typer.echo(f"#{number} is not in {settings.issues_dir}", err=True)
+        raise typer.Exit(code=1)
+    with steps.step("agent", f"reading the code ({agent.model})") as done:
+        try:
+            refined = refine_mod.refine(issue, clone, agent)
+        except AgentError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
+        r = refined.run
+        done(f"{r.turns} turns, {r.latency_ms / 1000:.0f} s, ${r.cost_usd:.3f}")
+    if refined.unknown_paths:
+        steps.note(
+            "paths",
+            f"not in {commit[:7]}: {', '.join(refined.unknown_paths)}",
+            ok=False,
+        )
+    else:
+        steps.note("paths", "all in the commit")
+    if json:
+        typer.echo(refined.model_dump_json(indent=2))
+    else:
+        _show_spec(refined)
+
+
+def _refresh_issue(repo: str, number: int, steps: Steps) -> Issue | None:
+    """The stored issue, refreshed from GitHub first if there is a token."""
+    settings = get_settings()
+    token = settings.github_token
+    if token is None:
+        steps.note("GitHub", "skipped: no GITHUB_TOKEN, local copy", ok=False)
+        return load_issue(settings.issues_dir, repo, number)
+    source = GitHubIssueSource(
+        repo, token.get_secret_value(), comments=settings.issue_comments
+    )
+    with steps.step("GitHub", f"checking #{number}") as done:
+        got = triage_mod.refresh_issue(source, settings.issues_dir, number)
+        done(_fetched(number, got))
+    return got[0] if got is not None else load_issue(settings.issues_dir, repo, number)
+
+
+def _show_spec(refined: refine_mod.Refined) -> None:
+    """The spec for the dev at the plan gate. Agent text goes in as `Text`
+    (never parsed as markup). Piped, lines are not wrapped (as the card)."""
+    out = Console(highlight=False)
+    if out.is_terminal:
+        _render_spec(out, refined)
+        return
+    wide = Console(highlight=False, width=10_000)
+    with wide.capture() as captured:
+        _render_spec(wide, refined)
+    typer.echo("\n".join(line.rstrip() for line in captured.get().splitlines()))
+
+
+def _render_spec(out: Console, refined: refine_mod.Refined) -> None:
+    s = refined.spec
+
+    def section(title: str, lines: list[str]) -> None:
+        out.print(Text(title, style="bold"))
+        for line in lines or ["(none)"]:
+            out.print(Padding(Text(line), (0, 0, 0, 2)))
+
+    out.print(
+        Text(
+            f"{refined.repo}#{refined.number} at {refined.commit[:7]}, size {s.size}",
+            style="bold",
+        )
+    )
+    section("problem", [s.problem])
+    section("files", [f"{f.path}: {f.why}" for f in s.files])
+    section("tests", [f"{f.path}: {f.why}" for f in s.tests])
+    section("plan", [f"{n}. {step}" for n, step in enumerate(s.plan, 1)])
+    section("assumptions", s.assumptions)
+    section("open questions", s.open_questions)
+
+
+@eval_app.command("refine")
+def eval_refine(
+    repo: str = "philippmossier/local-ai-chat-playground",
+    only: str | None = None,
+    workers: int = 4,
+    bugs: Path = Path("playground/bugs.toml"),
+    seed: Path = Path("playground/seed.toml"),
+) -> None:
+    """Refine on the planted bugs: spec files vs the reference fix's files
+    (hit@k, recall@k, precision) and the size guess, per bug size.
+
+    Paid: one agent run per bug, nothing cached; `--only key,key` for a few.
+    Needs the seeded issues fetched (`fetch-issues`). The clone is updated to
+    the tip of main, the planted code. Every result goes to data/refine/.
+    """
+    settings = get_settings()
+    target = check_repo(repo)
+    agent = _agent()
+    planted = load_bugs(bugs, seed)
+    if only is not None:
+        keys = only.split(",")
+        unknown = set(keys) - {b.key for b in planted}
+        if unknown:
+            typer.echo(f"unknown bug keys: {', '.join(sorted(unknown))}", err=True)
+            raise typer.Exit(code=1)
+        planted = [b for b in planted if b.key in keys]
+    items = [
+        s for s in triage_eval.load_seed(seed) if s.key in {b.key for b in planted}
+    ]
+    matched = triage_eval.match(items, load_issues(settings.issues_dir, target))
+    clone = settings.clones_dir / target.replace("/", "-")
+    commit = refine_mod.update_clone(target, clone)
+    typer.echo(f"{target} at {commit[:7]}: {len(planted)} planted bugs, {agent.model}")
+
+    def run(key: str) -> refine_mod.Refined | AgentError:
+        try:
+            return refine_mod.refine(matched[key], clone, agent)
+        except AgentError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = dict(
+            zip(
+                [b.key for b in planted],
+                pool.map(run, [b.key for b in planted]),
+                strict=True,
+            )
+        )
+    done = {k: r for k, r in results.items() if not isinstance(r, AgentError)}
+    scores = [
+        refine_eval.score_bug(b, done[b.key].spec) for b in planted if b.key in done
+    ]
+    for b in planted:
+        r = results[b.key]
+        if isinstance(r, AgentError):
+            typer.echo(f"  {b.key:<30} {b.size}  failed: {r}")
+            continue
+        sc = next(x for x in scores if x.key == b.key)
+        listed = ", ".join(f.path for f in r.spec.files)
+        mark = "hit@1" if sc.hit[1] else "hit@3" if sc.hit[3] else "miss "
+        typer.echo(
+            f"  {b.key:<30} {b.size}->{sc.size_guess}  {mark}  "
+            f"${r.run.cost_usd:.3f} {r.run.turns:>2}t  {listed}"
+        )
+    for label, group in [
+        ("all", scores),
+        *[(f"size {z}", [x for x in scores if x.size == z]) for z in ("S", "M", "L")],
+    ]:
+        t = refine_eval.summarize(group)
+        if t.n:
+            typer.echo(
+                f"  {label:<7} n={t.n:<3} hit@1 {t.hit[1]:.2f}  hit@3 {t.hit[3]:.2f}  "
+                f"recall@3 {t.recall[3]:.2f}  precision {t.precision:.2f}  "
+                f"size {t.size_ok:.2f}  files listed {t.listed:.1f}"
+            )
+    runs = [r.run for r in done.values()]
+    if runs:
+        typer.echo(
+            f"  per bug: ${fmean(r.cost_usd for r in runs):.3f} mean, "
+            f"{median(r.turns for r in runs):.0f} turns and "
+            f"{median(r.latency_ms for r in runs) / 1000:.0f} s median, "
+            f"${sum(r.cost_usd for r in runs):.2f} total, "
+            f"{len(results) - len(done)} failed"
+        )
+    out = settings.refine_dir / f"eval-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(
+        TypeAdapter(dict[str, refine_mod.Refined]).dump_json(done, indent=2)
+    )
+    typer.echo(f"  -> {out}")
 
 
 @app.command()

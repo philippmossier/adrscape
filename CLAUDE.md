@@ -9,8 +9,8 @@ carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
 Roadmap: 0.1 triage (read-only) -> 0.2 the core loop on the playground
 (refine, plan gate, reproduce, implement, checks, reviewer, risk tiers, draft
-PR) -> later: lookback, more targets. Current: v0.1.3; 0.2 steps 1-3 (repo
-map, impact eval) done, step 4 (planted bugs) next.
+PR) -> later: lookback, more targets. Current: v0.1.3; 0.2 steps 1-4 (repo
+map, impact eval, planted bugs) done, step 5 (refine) in progress.
 
 ## Commands
 
@@ -30,6 +30,8 @@ map, impact eval) done, step 4 (planted bugs) next.
 - `uv run python playground/playground.py seed` / `reset --yes`: seed or wipe-and-reseed the demo playground via `gh` (your login; the repo is hard-coded)
 - `uv run cofabriq map build <clone> [--repo] [--until YYYY-MM-DD]` / `map show [--component]`: repo map from a local clone's history (history only is enough: `git clone --filter=blob:none --no-checkout`), components from `[map]` in the target file, co-change counts, into Neo4j (replaces that repo's map); vscode clone in `data/clones/`
 - `uv run cofabriq eval impact-set [--test]` / `eval impact [--test]`: freeze the impact set (vscode issues closed by a PR or commit; truth = components touched by their "fixes #N" commits in the clone) and score popularity vs kNN over earlier fixed issues vs kNN + co-change, hit@k / recall@k; needs `map build --until` at `[impact] map_until`; free
+- `uv run cofabriq refine <n> [--repo] [--json]`: spec for one issue (problem, files, tests, plan, assumptions, open questions, size) from a read-only Claude Code run (`claude -p --bare --restricted`, Read/Grep/Glob) on a full clone in `data/clones/` (cloned, or fetched and checked out detached at the default branch); paths checked against the commit; needs `ANTHROPIC_API_KEY` and `claude` on PATH; paid
+- `uv run cofabriq eval refine [--only key,key]`: refine on the planted bugs (`playground/bugs.toml`), files hit@k / recall@k / precision and the size guess, per bug size; paid (about $0.17 per bug), results in `data/refine/`
 - `uv run cofabriq mcp`: serve `search`, `decisions`, `affected` and `triage` (optional `repo`, default `TARGET_REPO`) as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
 
 ## Layout
@@ -41,11 +43,12 @@ map, impact eval) done, step 4 (planted bugs) next.
   - `ingest/`: `source.py` (Source protocol, `LocalGitSource`), fetch, parse, chunk, embed, extract (`Extractor` protocol)
   - `store/`: `postgres.py` (vectors), `graph.py` (Neo4j)
 - `src/cofabriq/issues/`: 0.1 issue ingest: `model.py` (`Issue`, `IssueSource`), `github.py` (GraphQL source), `fetch.py` (incremental store), `vectors.py` (pgvector, time-cut nearest), `verdict.py` (checked duplicate verdict), `triage.py` (the triage card schema, checks and assembly), `readiness.py` (required info with verified quotes, the route, the reply draft)
-- `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`, `impact.py`, `readiness.py`, `triage.py`)
+- `src/cofabriq/eval/`: eval sets and metrics (`dedupe.py`, `impact.py`, `readiness.py`, `triage.py`, `bugs.py`, `refine.py`)
 - `targets/<owner>-<name>.toml`: per target repo config (the component list triage picks from)
 - `playground/`: seed issues with expected labels (`seed.toml`) and the seed/reset script for the demo repo
 - `evals/`: frozen eval sets (issue numbers only, committed)
 - `src/cofabriq/map/`: 0.2 repo map: `components.py` (path -> component rules), `history.py` (commits and files of a clone as of a date), `build.py` (co-change counts), `store.py` (Neo4j, `Component`/`File` keyed by repo), `fixes.py` (issue -> fix commits from commit messages)
+- `src/cofabriq/loop/`: 0.2 core loop: `engine.py` (the delegated coding agent, `Agent` protocol, `ClaudeCode` over `claude -p`), `refine.py` (issue -> typed spec, path checks, the clone)
 - `src/cofabriq/mcp_server.py`: MCP tools
 - `docs/adr/`: architecture decision records, written when the decision is made
 

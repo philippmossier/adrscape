@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     target_repo: str | None = None
     github_token: SecretStr | None = None
     issue_comments: int = 10
+    anthropic_api_key: SecretStr | None = None  # the coding agent (0.2)
+    agent_model: str = "claude-opus-5-5"
+    agent_effort: str = "medium"
+    clones_dir: Path = Path("data/clones")
+    refine_dir: Path = Path("data/refine")
 
 
 @lru_cache
