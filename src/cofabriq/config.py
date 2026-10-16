@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     targets_dir: Path = Path("targets")
     target_repo: str | None = None
     github_token: SecretStr | None = None
+    github_write_token: SecretStr | None = None  # `run --apply` only (0.2)
     issue_comments: int = 10
     anthropic_api_key: SecretStr | None = None  # the coding agent (0.2)
     agent_model: str = "claude-opus-5-5"
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     refine_dir: Path = Path("data/refine")
     work_dir: Path = Path("data/work")  # worktrees of the core loop
     runs_dir: Path = Path("data/runs")  # one JSON per `cofabriq run`
+    human_dir: Path = Path("data/human")  # `eval human`: the PR set, the timings
 
 
 @lru_cache

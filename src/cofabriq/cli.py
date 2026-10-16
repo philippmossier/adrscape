@@ -1,5 +1,8 @@
 """Command-line entry point (`cofabriq ...`)."""
 
+import json as json_mod
+import time
+import webbrowser
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -8,6 +11,8 @@ from functools import partial
 from pathlib import Path
 from statistics import fmean, median
 
+import click
+import httpx
 import psycopg
 import typer
 from neo4j import Driver, GraphDatabase
@@ -29,11 +34,15 @@ from cofabriq.context.ingest.source import LocalGitSource, Source
 from cofabriq.context.store import graph as kg
 from cofabriq.context.store import postgres
 from cofabriq.eval import dedupe
+from cofabriq.eval import gate as gate_eval
+from cofabriq.eval import human as human_eval
 from cofabriq.eval import impact as impact_eval
 from cofabriq.eval import loop as loop_eval
 from cofabriq.eval import readiness as readiness_eval
 from cofabriq.eval import refine as refine_eval
+from cofabriq.eval import review as review_eval
 from cofabriq.eval import triage as triage_eval
+from cofabriq.eval import witness as witness_eval
 from cofabriq.eval.bugs import (
     PlantedBug,
     fix_path,
@@ -47,6 +56,9 @@ from cofabriq.issues import verdict as verdict_mod
 from cofabriq.issues.fetch import fetch_created, fetch_issues, load_issue, load_issues
 from cofabriq.issues.github import GitHubIssueSource
 from cofabriq.issues.model import Issue, check_repo
+from cofabriq.loop import gate as gate_mod
+from cofabriq.loop import pr as pr_mod
+from cofabriq.loop import publish as publish_mod
 from cofabriq.loop import refine as refine_mod
 from cofabriq.loop import run as run_mod
 from cofabriq.loop.engine import AgentError, ClaudeCode
@@ -964,6 +976,7 @@ def run(
     yes: bool = False,
     keep: bool = False,
     planted: bool = False,
+    apply: bool = False,
     bugs: Path = Path("playground/bugs.toml"),
     seed: Path = Path("playground/seed.toml"),
 ) -> None:
@@ -973,13 +986,16 @@ def run(
     the result afterwards; `--planted` hands it to the agent instead.
     `--spec` takes a `refine --json` file instead of a new refine run (the
     dev may edit it); `--yes` skips the plan gate; `--keep` leaves the
-    worktree in data/work/. The result goes to data/runs/."""
+    worktree in data/work/. When green, a reviewer reads the change and the
+    PR body goes to data/runs/ with the result; `--apply` also pushes a new
+    branch and opens a draft PR (playground only, GITHUB_WRITE_TOKEN)."""
     settings = get_settings()
     target = check_repo(repo)
     rules = run_mod.load_rules(settings.targets_dir, target)
     if rules is None:
         typer.echo(f"no [loop] in the target file of {target}", err=True)
         raise typer.Exit(code=1)
+    write_token = _write_token(target) if apply else None  # before paying
     agent = _agent()
     steps = Steps(Console(stderr=True, soft_wrap=True))
     clone = settings.clones_dir / target.replace("/", "-")
@@ -1033,6 +1049,19 @@ def run(
                 agent=agent.editing(budget_usd=1.0),
                 sandbox=sandbox,
             )
+            # the review gate on the green tree, before the judge resets it:
+            # review, blockers proven by a test, fixed, reviewed again
+            gated = None
+            if result.status == "green":
+                gated = gate_mod.review_gate(
+                    spec=refined.spec,
+                    rules=rules,
+                    result=result,
+                    worktree=worktree,
+                    reader=agent,
+                    editor=agent.editing(budget_usd=1.0),
+                    sandbox=sandbox,
+                )
             # no verdicts by default: an issue without a planted bug has no
             # answer key, and with --planted the agent already had the repro
             judged = loop_eval.Judged(result=result)
@@ -1056,14 +1085,126 @@ def run(
         tries = len(result.attempts)
         done(f"{result.status}, {tries} attempts, ${result.cost_usd:.3f}")
     _show_loop(judged)
-    out = settings.runs_dir / (
-        f"{target.replace('/', '-')}-{number}-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
-    )
+    stem = f"{target.replace('/', '-')}-{number}-{datetime.now(UTC):%Y%m%dT%H%M%S}"
+    out = settings.runs_dir / f"{stem}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(judged.model_dump_json(indent=2), "utf-8")
+    record = judged.model_dump(mode="json")
+    if gated is not None:
+        record["gate"] = gated.model_dump(mode="json")
+        _show_gate(gated)
+    if gated is not None and gated.status != "blocked":
+        draft = pr_mod.draft(
+            issue_title=issue.title,
+            spec=refined.spec,
+            result=gated.result,
+            tests=rules.tests,
+            risk_rules=pr_mod.load_risk(settings.targets_dir, target),
+            components=components_mod.load_rules(settings.targets_dir, target),
+            review=gated.review,
+            rounds=gated.rounds,
+        )
+        record["draft"] = draft.model_dump(mode="json")
+        body = settings.runs_dir / f"{stem}.pr.md"
+        body.write_text(draft.body, "utf-8")
+        _show_draft(draft)
+        if write_token is None:
+            typer.echo(f"-> {body} (dry run: nothing sent to GitHub)")
+        else:
+            typer.echo(f"-> {body}")
+            record["published"] = _publish(  # a PR or the error: the run is kept
+                target, clone, issue, gated.result, draft, write_token, steps
+            )
+    out.write_text(json_mod.dumps(record, indent=2), "utf-8")
     typer.echo(f"-> {out}")
-    if result.status != "green" or (judged.judge is not None and not judged.judge.ok):
+    blocked = gated is not None and gated.status == "blocked"
+    judged_red = judged.judge is not None and not judged.judge.ok
+    if result.status != "green" or blocked or judged_red:
         raise typer.Exit(code=2)
+
+
+def _write_token(repo: str) -> str:
+    """The write token for `--apply`, after the repo check."""
+    try:
+        publish_mod.check_writable(repo)
+    except publish_mod.PublishError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    token = get_settings().github_write_token
+    if token is None:
+        typer.echo("GITHUB_WRITE_TOKEN is not set (see .env.example)", err=True)
+        raise typer.Exit(code=1)
+    return token.get_secret_value()
+
+
+def _publish(
+    repo: str,
+    clone: Path,
+    issue: Issue,
+    result: run_mod.LoopResult,
+    draft: pr_mod.Draft,
+    token: str,
+    steps: Steps,
+) -> dict[str, object]:
+    """The PR as a dict, or `{"error": ...}` (the run is saved either way)."""
+    try:
+        with steps.step("publish", f"branch + draft PR on {repo}") as done:
+            published = publish_mod.publish(
+                repo=repo,
+                clone=clone,
+                base_commit=result.commit,
+                diff=result.diff,
+                number=result.number,
+                issue_title=issue.title,
+                title=draft.title,
+                body=draft.body,
+                token=token,
+                pulls=publish_mod.GitHubPulls(token),
+            )
+            done(f"{published.url} ({published.branch})")
+    except (publish_mod.PublishError, httpx.HTTPError) as exc:
+        typer.echo(str(exc), err=True)
+        return {"error": str(exc)}
+    return published.model_dump(mode="json")
+
+
+def _show_gate(gated: gate_mod.Gated) -> None:
+    """Per review round: blockers proven or not, the fix against them."""
+    out = Console(highlight=False, soft_wrap=True)
+    for n, r in enumerate(gated.rounds, 1):
+        verdict = "approved" if r.review.approved else "changes requested"
+        out.print(Text(f"review {n} {verdict}, {len(r.proofs)} blockers"))
+        for p in r.proofs:
+            state = f"proven by {', '.join(p.tests)}" if p.proven else "unproven"
+            where = gate_mod.finding_text(p.finding)
+            out.print(Padding(Text(f"{state}: {where}"), (0, 0, 0, 9)))
+        if r.attempts:
+            ok = "green" if r.attempts[-1].green else "still red"
+            out.print(Padding(Text(f"fix: {ok} after {len(r.attempts)}"), (0, 0, 0, 9)))
+    if gated.error:
+        out.print(Text(f"review failed: {gated.error}", style="yellow"))
+    blocked = gated.status == "blocked"
+    note = " (a proven blocker is left: no PR)" if blocked else ""
+    line = f"gate     {gated.status}{note}, ${gated.cost_usd:.3f}"
+    out.print(Text(line, style="red" if blocked else ""))
+
+
+def _show_draft(draft: pr_mod.Draft) -> None:
+    """Tier and review verdict; agent text as `Text`."""
+    out = Console(highlight=False, soft_wrap=True)
+    tiers = ", ".join(f"{f.path} ({f.component}, {f.tier})" for f in draft.risk.files)
+    out.print(Text(f"risk     {draft.risk.tier}: {tiers}"))
+    review = draft.review
+    if review is None:
+        out.print(Text("review   did not run", style="yellow"))
+        return
+    r, run = review.reviewed, review.run
+    verdict = "approved" if review.approved else "CHANGES REQUESTED"
+    cost = f"${run.cost_usd:.3f} {run.turns} turns {run.latency_ms / 1000:.0f} s"
+    out.print(Text(f"review   {verdict} ({cost})"))
+    out.print(Padding(Text(r.summary), (0, 0, 0, 9)))
+    for f in r.findings:
+        where = f.path if f.line is None else f"{f.path}:{f.line}"
+        out.print(Padding(Text(f"{f.severity} {where}: {f.text}"), (0, 0, 0, 9)))
 
 
 def _show_loop(judged: loop_eval.Judged) -> None:
@@ -1209,6 +1350,7 @@ def eval_loop(
     only: str | None = None,
     workers: int = 4,
     planted: bool = False,
+    wrong: bool = False,
     bugs: Path = Path("playground/bugs.toml"),
     seed: Path = Path("playground/seed.toml"),
 ) -> None:
@@ -1222,7 +1364,14 @@ def eval_loop(
     `eval refine` stored in data/refine/ (refine is measured there); a bug
     without one, or with one made at another commit, is reported and
     skipped. Every result goes to data/runs/.
+
+    `--wrong`: the implementer is told to make a plausible fix that does
+    not fix the bug (wrong-*.json, the reviewer eval's negatives; a judge
+    red is the goal there).
     """
+    if planted and wrong:
+        typer.echo("--wrong needs the agent's own repro, not --planted", err=True)
+        raise typer.Exit(code=1)
     settings = get_settings()
     target = check_repo(repo)
     rules = run_mod.load_rules(settings.targets_dir, target)
@@ -1248,10 +1397,11 @@ def eval_loop(
             typer.echo(f"  {b.key:<30} skipped: no stored spec at {commit[:7]}")
     typer.echo(f"{target} at {commit[:7]}: {len(ready)} logic bugs, {agent.model}")
     sandbox = Podman(image=rules.image, setup=rules.setup)
+    prefix = "wrong" if wrong else "eval"
 
     def run(bug: PlantedBug) -> loop_eval.Judged:
         refined = specs[bug.key]
-        worktree = settings.work_dir / f"eval-{bug.key}"
+        worktree = settings.work_dir / f"{prefix}-{bug.key}"
         try:
             result = run_mod.run_loop(
                 repo=target,
@@ -1264,6 +1414,7 @@ def eval_loop(
                 rules=rules,
                 agent=agent,
                 sandbox=sandbox,
+                instructions=review_eval.WRONG if wrong else run_mod.INSTRUCTIONS,
             )
             return loop_eval.against_key(
                 result,
@@ -1306,11 +1457,378 @@ def eval_loop(
             )
     total = sum(sc.cost_usd for sc in scores)
     typer.echo(f"  total ${total:.2f}")
-    out = settings.runs_dir / f"eval-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
+    if wrong:
+        kept = sum(review_eval.is_case(j, "wrong") for j in results.values())
+        typer.echo(f"  wrong fixes kept (green, judge red): {kept}/{len(results)}")
+    out = settings.runs_dir / f"{prefix}-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(
         TypeAdapter(dict[str, loop_eval.Judged]).dump_json(results, indent=2)
     )
+    typer.echo(f"  -> {out}")
+
+
+@eval_app.command("witness")
+def eval_witness(
+    repo: str = "philippmossier/local-ai-chat-playground",
+    only: str | None = None,
+    workers: int = 4,
+    bugs: Path = Path("playground/bugs.toml"),
+    seed: Path = Path("playground/seed.toml"),
+) -> None:
+    """Prove the wrong fixes of `eval loop --wrong` that the planted repro
+    missed (judge green): an agent writes a test for what the fix leaves
+    broken; confirmed when it is red on the fix and green with the
+    reference fix. Paid (one test-writing run per fix, up to 3 tries).
+    Results to data/runs/witness-*.json, read by `eval review`."""
+    settings = get_settings()
+    target = check_repo(repo)
+    rules = run_mod.load_rules(settings.targets_dir, target)
+    if rules is None:
+        typer.echo(f"no [loop] in the target file of {target}", err=True)
+        raise typer.Exit(code=1)
+    agent = _agent().editing(budget_usd=1.0)
+    by_key = {b.key: b for b in load_bugs(bugs, seed)}
+    clone = settings.clones_dir / target.replace("/", "-")
+    specs = loop_eval.load_specs(settings.refine_dir)
+    wrong = review_eval.load_runs(settings.runs_dir, "wrong")
+    todo = [
+        k
+        for k, j in sorted(wrong.items())
+        if review_eval.usable(j) and j.judge is not None and j.judge.ok
+    ]
+    if only is not None:
+        todo = [k for k in todo if k in only.split(",")]
+    typer.echo(f"{target}: {len(todo)} wrong fixes the planted repro missed")
+    sandbox = Podman(image=rules.image, setup=rules.setup)
+
+    def run(key: str) -> witness_eval.Witness:
+        worktree = settings.work_dir / f"witness-{key}"
+        try:
+            return witness_eval.witness(
+                judged=wrong[key],
+                spec=specs[key].spec,
+                rules=rules,
+                clone=clone,
+                worktree=worktree,
+                agent=agent,
+                sandbox=sandbox,
+                patch=fix_path(bugs, by_key[key]),
+            )
+        finally:
+            run_mod.remove_worktree(clone, worktree)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = dict(zip(todo, pool.map(run, todo), strict=True))
+    for key, w in results.items():
+        if w.confirmed:
+            state = "confirmed"
+        elif w.error:
+            state = w.error
+        elif w.red is None:
+            state = "no red witness"
+        else:
+            state = "witness red with the reference fix too"
+        typer.echo(f"  {key:<30} {state}  {len(w.attempts)} tries  ${w.cost_usd:.3f}")
+    kept = sum(w.confirmed for w in results.values())
+    total = sum(w.cost_usd for w in results.values())
+    typer.echo(f"  confirmed {kept}/{len(results)}  total ${total:.2f}")
+    out = settings.runs_dir / f"witness-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
+    out.write_bytes(
+        TypeAdapter(dict[str, witness_eval.Witness]).dump_json(results, indent=2)
+    )
+    typer.echo(f"  -> {out}")
+
+
+@eval_app.command("human")
+def eval_human(
+    repo: str = "philippmossier/local-ai-chat-playground",
+    publish: bool = False,
+    update_bodies: bool = False,
+    shuffle: int = 0,
+    seed: Path = Path("playground/seed.toml"),
+) -> None:
+    """Human minutes per merged PR. `--publish` (once, paid nothing, writes
+    to GitHub): one draft PR per planted logic bug, 3 of them a proven
+    wrong fix, shuffled by `--shuffle`; the set goes to data/human/set.json
+    (the answer key: don't open it before reviewing). Without it: the
+    timed review, one PR after the other, resumable; run it in your own
+    terminal. Nothing is merged; the decision is recorded here."""
+    settings = get_settings()
+    target = check_repo(repo)
+    set_path = settings.human_dir / "set.json"
+    records_path = settings.human_dir / "reviews.json"
+    if publish:
+        _publish_human_set(target, set_path, shuffle, seed, update_bodies)
+        return
+    if not set_path.is_file():
+        typer.echo(f"no {set_path}: run with --publish first", err=True)
+        raise typer.Exit(code=1)
+    hset = human_eval.HumanSet.model_validate_json(set_path.read_text("utf-8"))
+    adapter = TypeAdapter(list[human_eval.Record])
+    records = (
+        adapter.validate_json(records_path.read_bytes())
+        if records_path.is_file()
+        else []
+    )
+    done = {r.url for r in records}
+    todo = [e for e in hset.entries if e.url not in done]
+    typer.echo(f"{len(done)} of {len(hset.entries)} reviewed")
+    choice = click.Choice(["merge", "changes", "close"])
+    for i, e in enumerate(todo, len(done) + 1):
+        typer.echo(f"\n[{i}/{len(hset.entries)}] {e.url}")
+        typer.echo("Review it on GitHub as usual (don't click merge).")
+        webbrowser.open(e.url)
+        start = time.monotonic()
+        typer.prompt("Enter when you have decided", default="", show_default=False)
+        seconds = round(time.monotonic() - start, 1)
+        decision = typer.prompt("decision", type=choice)
+        note = typer.prompt("note (optional)", default="", show_default=False)
+        records.append(
+            human_eval.Record(url=e.url, seconds=seconds, decision=decision, note=note)
+        )
+        records_path.write_bytes(adapter.dump_json(records, indent=2))
+        typer.echo(f"  {seconds / 60:.1f} min, {decision}")
+    t = human_eval.summarize(hset.entries, records)
+    typer.echo(
+        f"\nn={t.n}  {t.minutes:.1f} min per PR (median)  "
+        f"{t.per_merge:.1f} min per merged PR  merged {t.merged}  "
+        f"wrong caught {t.caught}/{t.wrong}  right merged {t.right_merged}/"
+        f"{t.n - t.wrong}  agreed with the reviewer {t.agreed:.2f}"
+    )
+
+
+def _publish_human_set(
+    target: str, set_path: Path, shuffle: int, seed: Path, update: bool
+) -> None:
+    """Draft PRs for the set; resumable (published picks are skipped, or
+    get the current body with `update`)."""
+    settings = get_settings()
+    token = _write_token(target)
+    rules = run_mod.load_rules(settings.targets_dir, target)
+    if rules is None:
+        typer.echo(f"no [loop] in the target file of {target}", err=True)
+        raise typer.Exit(code=1)
+    found = review_eval.cases(
+        settings.runs_dir, witness_eval.load_witnessed(settings.runs_dir)
+    )
+    runs = {(k, kind): j for k, kind, j in found}
+    reviews = review_eval.load_reviews(settings.runs_dir)
+    if set_path.is_file():
+        hset = human_eval.HumanSet.model_validate_json(set_path.read_text("utf-8"))
+    else:
+        right = [k for k, kind, _ in found if kind == "right"]
+        wrong = [k for k, kind, _ in found if kind == "wrong"]
+        hset = human_eval.HumanSet(picks=human_eval.pick(right, wrong, shuffle))
+    missing = [p for p in hset.picks if (p.key, p.kind) not in reviews]
+    if missing:
+        names = ", ".join(f"{p.kind} {p.key}" for p in missing)
+        typer.echo(f"no stored review for {names}: run eval review", err=True)
+        raise typer.Exit(code=1)
+    specs = loop_eval.load_specs(settings.refine_dir)
+    titles = {s.key: s.title for s in triage_eval.load_seed(seed)}
+    clone = settings.clones_dir / target.replace("/", "-")
+    pulls = publish_mod.GitHubPulls(token)
+    published = {(e.key, e.kind): e for e in hset.entries}
+    set_path.parent.mkdir(parents=True, exist_ok=True)
+    for p in hset.picks:
+        if (p.key, p.kind) in published and not update:
+            continue
+        result = runs[(p.key, p.kind)].result
+        review = reviews[(p.key, p.kind)]
+        draft = pr_mod.draft(
+            issue_title=titles[p.key],
+            spec=specs[p.key].spec,
+            result=result,
+            tests=rules.tests,
+            risk_rules=pr_mod.load_risk(settings.targets_dir, target),
+            components=components_mod.load_rules(settings.targets_dir, target),
+            review=review,
+        )
+        entry = published.get((p.key, p.kind))
+        if entry is not None:
+            pulls.update_body(target, entry.pr, draft.body)
+            typer.echo(f"  #{result.number}: body updated on {entry.url}")
+            continue
+        try:
+            got = publish_mod.publish(
+                repo=target,
+                clone=clone,
+                base_commit=result.commit,
+                diff=result.diff,
+                number=result.number,
+                issue_title=titles[p.key],
+                title=draft.title,
+                body=draft.body,
+                token=token,
+                pulls=pulls,
+            )
+        except (publish_mod.PublishError, httpx.HTTPError) as exc:
+            set_path.write_text(hset.model_dump_json(indent=2), "utf-8")
+            typer.echo(f"  #{result.number}: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        hset.entries.append(
+            human_eval.Entry(
+                key=p.key,
+                kind=p.kind,
+                number=result.number,
+                pr=got.number,
+                url=got.url,
+                branch=got.branch,
+                approved=review.approved,
+            )
+        )
+        set_path.write_text(hset.model_dump_json(indent=2), "utf-8")
+        typer.echo(f"  #{result.number} -> {got.url}")
+    typer.echo(f"{len(hset.entries)} draft PRs, set in {set_path}")
+
+
+@eval_app.command("gate")
+def eval_gate(
+    repo: str = "philippmossier/local-ai-chat-playground",
+    only: str | None = None,
+    workers: int = 4,
+    bugs: Path = Path("playground/bugs.toml"),
+    seed: Path = Path("playground/seed.toml"),
+) -> None:
+    """The review gate on fixes with a known verdict: right ones should be
+    published, wrong ones blocked or fixed, never leaked (published and
+    still wrong by the planted repro or the witness test). Proofs checked
+    against the reference fix. Each case replays its diff with an install;
+    paid (reviews, proofs and fix rounds; about $0.15-0.40 per case)."""
+    settings = get_settings()
+    target = check_repo(repo)
+    rules = run_mod.load_rules(settings.targets_dir, target)
+    if rules is None:
+        typer.echo(f"no [loop] in the target file of {target}", err=True)
+        raise typer.Exit(code=1)
+    reader = _agent()
+    editor = reader.editing(budget_usd=1.0)
+    by_key = {b.key: b for b in load_bugs(bugs, seed)}
+    clone = settings.clones_dir / target.replace("/", "-")
+    specs = loop_eval.load_specs(settings.refine_dir)
+    witnesses = witness_eval.load_witnesses(settings.runs_dir)
+    witnessed = frozenset(k for k, w in witnesses.items() if w.confirmed)
+    todo = review_eval.cases(settings.runs_dir, witnessed)
+    if only is not None:
+        todo = [c for c in todo if c[0] in only.split(",")]
+    typer.echo(
+        f"{target}: {sum(k == 'right' for _, k, _ in todo)} right, "
+        f"{sum(k == 'wrong' for _, k, _ in todo)} wrong fixes, {reader.model}"
+    )
+    sandbox = Podman(image=rules.image, setup=rules.setup)
+
+    def run(case: tuple[str, review_eval.Kind, loop_eval.Judged]) -> gate_eval.GateCase:
+        key, kind, judged = case
+        worktree = settings.work_dir / f"gate-{kind}-{key}"
+        try:
+            return gate_eval.gate_case(
+                key=key,
+                kind=kind,
+                judged=judged,
+                spec=specs[key].spec,
+                rules=rules,
+                clone=clone,
+                worktree=worktree,
+                reader=reader,
+                editor=editor,
+                sandbox=sandbox,
+                planted=repro_path(bugs, by_key[key]),
+                patch=fix_path(bugs, by_key[key]),
+                witness=witnesses.get(key),
+            )
+        finally:
+            run_mod.remove_worktree(clone, worktree)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(run, todo))
+    for c in results:
+        g = c.gated
+        if g is None:
+            typer.echo(f"  {c.kind:<5} {c.key:<30} setup failed: {c.error}")
+            continue
+        pv = c.proofs_valid
+        valid = "-" if pv is None else ("valid" if pv.ok else "INVALID")
+        typer.echo(
+            f"  {c.kind:<5} {c.key:<30} {g.status:<9} {c.outcome:<11} "
+            f"{len(g.rounds)} reviews {c.proven} proven (proofs {valid})  "
+            f"${g.cost_usd:.3f}"
+        )
+    t = gate_eval.summarize(results)
+    typer.echo(
+        f"  right n={t.right} published {t.published:.2f}  wrong n={t.wrong} "
+        f"blocked {t.blocked:.2f} fixed {t.fixed:.2f} leaked {t.leaked:.2f}  "
+        f"proofs {t.proofs} valid {t.proofs_valid:.2f}  ${t.cost_usd:.3f}/case"
+    )
+    out = settings.runs_dir / f"gate-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
+    out.write_bytes(TypeAdapter(list[gate_eval.GateCase]).dump_json(results, indent=2))
+    typer.echo(f"  -> {out}")
+
+
+@eval_app.command("review")
+def eval_review(
+    repo: str = "philippmossier/local-ai-chat-playground",
+    only: str | None = None,
+    workers: int = 4,
+) -> None:
+    """The reviewer on fixes with a known verdict: right ones (`eval loop`,
+    judge green) should be approved, wrong ones (`eval loop --wrong`, judge
+    red) not. Each stored diff is replayed in a fresh worktree, so this
+    pays for reviewer runs only (about $0.04 each). Results to data/runs/."""
+    settings = get_settings()
+    target = check_repo(repo)
+    rules = run_mod.load_rules(settings.targets_dir, target)
+    if rules is None:
+        typer.echo(f"no [loop] in the target file of {target}", err=True)
+        raise typer.Exit(code=1)
+    agent = _agent()
+    clone = settings.clones_dir / target.replace("/", "-")
+    specs = loop_eval.load_specs(settings.refine_dir)
+    todo = review_eval.cases(
+        settings.runs_dir, witness_eval.load_witnessed(settings.runs_dir)
+    )
+    if only is not None:
+        todo = [c for c in todo if c[0] in only.split(",")]
+    typer.echo(
+        f"{target}: {sum(k == 'right' for _, k, _ in todo)} right, "
+        f"{sum(k == 'wrong' for _, k, _ in todo)} wrong fixes, {agent.model}"
+    )
+
+    def run(case: tuple[str, review_eval.Kind, loop_eval.Judged]) -> review_eval.Case:
+        key, kind, judged = case
+        return review_eval.review_case(
+            key=key,
+            kind=kind,
+            judged=judged,
+            spec=specs[key].spec,
+            rules=rules,
+            clone=clone,
+            worktree=settings.work_dir / f"review-{kind}-{key}",
+            agent=agent,
+        )
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(run, todo))
+    for c in results:
+        if c.review is None:
+            typer.echo(f"  {c.kind:<5} {c.key:<30} failed: {c.error}")
+            continue
+        r = c.review
+        good = c.approved == (c.kind == "right")
+        verdict = "approved" if c.approved else "rejected"
+        typer.echo(
+            f"  {c.kind:<5} {c.key:<30} {verdict:<9} {'ok ' if good else 'MISS'} "
+            f"test {'y' if r.reviewed.test_matches_spec else 'n'} "
+            f"cause {'y' if r.reviewed.fixes_cause else 'n'} "
+            f"{len(r.reviewed.findings)} findings  ${r.run.cost_usd:.3f}"
+        )
+    t = review_eval.summarize(results)
+    typer.echo(
+        f"  right n={t.right} passed {t.passed:.2f}  wrong n={t.wrong} caught "
+        f"{t.caught:.2f}  failed runs {t.failed}  ${t.cost_usd:.3f}/review"
+    )
+    out = settings.runs_dir / f"review-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
+    out.write_bytes(TypeAdapter(list[review_eval.Case]).dump_json(results, indent=2))
     typer.echo(f"  -> {out}")
 
 

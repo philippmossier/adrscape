@@ -28,7 +28,14 @@ from pydantic import BaseModel, TypeAdapter
 
 from cofabriq.eval.bugs import PlantedBug
 from cofabriq.loop.refine import Refined, git_env
-from cofabriq.loop.run import CheckResult, LoopResult, Rules, repro_command, reset
+from cofabriq.loop.run import (
+    CheckResult,
+    LoopResult,
+    Rules,
+    git,
+    repro_command,
+    reset,
+)
 from cofabriq.loop.sandbox import Sandbox
 
 _refined_adapter = TypeAdapter(dict[str, Refined])
@@ -63,13 +70,21 @@ def judge(worktree: Path, rules: Rules, planted: Path, sandbox: Sandbox) -> Chec
 
 
 def validate(
-    worktree: Path, rules: Rules, repro: list[str], patch: Path, sandbox: Sandbox
+    worktree: Path,
+    rules: Rules,
+    repro: list[str],
+    patch: Path,
+    sandbox: Sandbox,
+    base: str | None = None,
 ) -> CheckResult:
     """The agent's repro on the planted code with the reference fix applied:
     green = it tests this bug (it was red without the fix). Resets the
-    worktree's code, so it runs last."""
+    worktree's code, so it runs last. `base`: the planted code's commit,
+    when the worktree has commits on top (the review gate's layers)."""
     # 1. keep the agent's test, drop everything else it or the fix changed
     tests = {p: (worktree / p).read_bytes() for p in repro}
+    if base is not None:
+        git(worktree, "checkout", "-qf", "--detach", base)
     reset(worktree)
     for p, data in tests.items():
         (worktree / p).parent.mkdir(parents=True, exist_ok=True)
@@ -105,7 +120,7 @@ def against_key(
     if result.status == "green":
         verdict = judge(worktree, rules, planted, sandbox)
     if result.repro:  # last: it resets the code
-        valid = validate(worktree, rules, result.repro, patch, sandbox)
+        valid = validate(worktree, rules, result.repro, patch, sandbox, result.commit)
     return Judged(result=result, judge=verdict, valid=valid)
 
 

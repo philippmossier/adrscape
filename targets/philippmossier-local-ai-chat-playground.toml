@@ -41,3 +41,12 @@ checks = [
   { name = "lint", cmd = "pnpm lint" },
   { name = "test", cmd = "pnpm test" },
 ]
+
+# Risk tier of a change (0.2): the highest tier of the components its
+# non-test files are in (via [map]); test files count as low, a component
+# in no list gets `unlisted` (see src/cofabriq/loop/pr.py).
+[risk]
+high = ["privacy", "build-deploy"]  # the local-only promise; CI, deps, headers
+medium = ["inference", "models", "hardware-check"]  # needs a GPU or a download to see
+low = ["chat", "ui"]
+unlisted = "medium"

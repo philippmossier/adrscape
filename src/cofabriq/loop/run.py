@@ -214,30 +214,40 @@ def prompt(
     failed: list[CheckResult],
     n: int,
     diff: str,
+    instructions: str = INSTRUCTIONS,
+    context: tuple[str, ...] = (),
 ) -> str:
     """The implementer's prompt."""
-    text = INSTRUCTIONS.format(
+    text = instructions.format(
         repro=", ".join(repro),
         protected=", ".join(rules.protected) or "(none)",
         checks=", ".join(c.name for c in rules.checks),
     )
-    parts = [text, fenced("spec", render_spec(spec)), *_later(n, diff, failed)]
+    spec_part = fenced("spec", render_spec(spec))
+    parts = [text, spec_part, *context, *_later(n, diff, failed)]
     return "\n\n".join(parts)
 
 
 def reproduce_prompt(
-    spec: Spec, rules: Rules, failed: list[CheckResult], n: int, diff: str
+    spec: Spec,
+    rules: Rules,
+    failed: list[CheckResult],
+    n: int,
+    diff: str,
+    instructions: str = REPRODUCE,
+    context: tuple[str, ...] = (),
 ) -> str:
-    """The reproducer's prompt: the spec with its test ideas."""
-    text = REPRODUCE.format(
+    """The reproducer's prompt: the spec with its test ideas, then any
+    `context` (already fenced)."""
+    text = instructions.format(
         tests=", ".join(rules.tests),
         checks=", ".join(rules.repro_checks) or "no other checks",
     )
     spec_part = fenced("spec", render_spec(spec, tests=True))
-    return "\n\n".join([text, spec_part, *_later(n, diff, failed)])
+    return "\n\n".join([text, spec_part, *context, *_later(n, diff, failed)])
 
 
-def _git(cwd: Path, *args: str) -> str:
+def git(cwd: Path, *args: str) -> str:
     return subprocess.run(
         ["git", "-C", str(cwd), *args],
         capture_output=True,
@@ -253,20 +263,20 @@ def add_worktree(clone: Path, path: Path, commit: str) -> None:
     remove_worktree(clone, path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with _worktrees:
-        _git(clone, "worktree", "add", "-q", "--detach", str(path.resolve()), commit)
+        git(clone, "worktree", "add", "-q", "--detach", str(path.resolve()), commit)
 
 
 def remove_worktree(clone: Path, path: Path) -> None:
     with _worktrees:
         if path.exists():
-            _git(clone, "worktree", "remove", "--force", str(path.resolve()))
-        _git(clone, "worktree", "prune")
+            git(clone, "worktree", "remove", "--force", str(path.resolve()))
+        git(clone, "worktree", "prune")
 
 
 def changed_paths(worktree: Path) -> list[str]:
     """Tracked files changed and untracked files added (ignored ones, like
     node_modules, excluded)."""
-    out = _git(worktree, "status", "--porcelain", "-z", "--untracked-files=all")
+    out = git(worktree, "status", "--porcelain", "-z", "--untracked-files=all")
     paths: list[str] = []
     entries = iter(out.split("\0"))
     for entry in entries:
@@ -281,14 +291,14 @@ def changed_paths(worktree: Path) -> list[str]:
 def restore(worktree: Path, paths: list[str], originals: dict[str, bytes]) -> None:
     """Put protected paths back: the copied repro from its bytes, tracked
     files from HEAD, anything else (a new file) removed."""
-    tracked = set(_git(worktree, "ls-files", "-z").split("\0"))
+    tracked = set(git(worktree, "ls-files", "-z").split("\0"))
     for p in paths:
         target = worktree / p
         if p in originals:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(originals[p])
         elif p in tracked:
-            _git(worktree, "checkout", "HEAD", "--", p)
+            git(worktree, "checkout", "HEAD", "--", p)
         elif target.is_dir():
             shutil.rmtree(target)
         else:
@@ -299,21 +309,31 @@ def _differs(path: Path, original: bytes) -> bool:
     return not path.is_file() or path.read_bytes() != original
 
 
-def diff(worktree: Path, exclude: list[str]) -> str:
-    """The change against HEAD, new files included, `exclude` left out."""
-    _git(worktree, "add", "-A")
+def diff(worktree: Path, exclude: list[str], base: str = "HEAD") -> str:
+    """The change against `base`, new files included, `exclude` left out."""
+    return _staged(worktree, base, exclude)
+
+
+def changed_since(worktree: Path, base: str, exclude: list[str]) -> list[str]:
+    """Paths changed against `base` (commits in the worktree included)."""
+    names = _staged(worktree, base, exclude, "--name-only")
+    return sorted(p for p in names.splitlines() if p)
+
+
+def _staged(worktree: Path, base: str, exclude: list[str], *flags: str) -> str:
+    git(worktree, "add", "-A")
     try:
         skip = [f":(exclude){p}" for p in exclude]
-        return _git(worktree, "diff", "--cached", "HEAD", "--", ".", *skip)
+        return git(worktree, "diff", "--cached", *flags, base, "--", ".", *skip)
     finally:
-        _git(worktree, "reset", "-q")  # the index stays as the agent left it
+        git(worktree, "reset", "-q")  # the index stays as the agent left it
 
 
 def reset(worktree: Path) -> None:
     """Back to HEAD: tracked files restored, untracked ones removed (ignored
     ones, like node_modules, kept)."""
-    _git(worktree, "checkout", "-q", "HEAD", "--", ".")
-    _git(worktree, "clean", "-fdq")
+    git(worktree, "checkout", "-q", "HEAD", "--", ".")
+    git(worktree, "clean", "-fdq")
 
 
 def is_test(path: str, globs: list[str]) -> bool:
@@ -341,20 +361,28 @@ def run_checks(
 
 
 def reproduce(
-    *, spec: Spec, rules: Rules, worktree: Path, agent: Agent, sandbox: Sandbox
+    *,
+    spec: Spec,
+    rules: Rules,
+    worktree: Path,
+    agent: Agent,
+    sandbox: Sandbox,
+    instructions: str = REPRODUCE,
+    context: tuple[str, ...] = (),
 ) -> tuple[list[Attempt], list[str], CheckResult | None]:
     """The agent writes the failing test: (attempts, its test paths, the red
     run), or no paths and no red run after MAX_ATTEMPTS. Accepted when the
     test fails and the `repro_checks` pass on the unchanged code: a test
     that fails because it imports what the fix would add breaks the type
-    check, not the bug."""
+    check, not the bug. `instructions` and `context`: another test writer
+    on the same gate (the reviewer eval's witness)."""
     gate = [c for c in rules.checks if c.name in rules.repro_checks]
     attempts: list[Attempt] = []
     failed: list[CheckResult] = []
     for n in range(1, MAX_ATTEMPTS + 1):
         # 1. the agent writes; from attempt 2 it sees its diff and the errors
         current = diff(worktree, []) if n > 1 else ""
-        text = reproduce_prompt(spec, rules, failed, n, current)
+        text = reproduce_prompt(spec, rules, failed, n, current, instructions, context)
         try:
             run = agent(text, Reproduced.model_json_schema(), worktree)
             summary, error = Reproduced.model_validate(run.output).summary, ""
@@ -403,11 +431,13 @@ def run_loop(
     rules: Rules,
     agent: Agent,
     sandbox: Sandbox,
+    instructions: str = INSTRUCTIONS,
 ) -> LoopResult:
     """One issue through reproduce -> implement -> checks, at most
     MAX_ATTEMPTS agent runs per step. `repro_file`: a planted repro, or
-    None for the agent to write one. Leaves the worktree in place (the
-    caller removes it)."""
+    None for the agent to write one. `instructions`: the implementer's
+    (the reviewer eval swaps in a wrong-on-purpose one). Leaves the
+    worktree in place (the caller removes it)."""
     if repro_file is None and not rules.tests:
         raise ValueError("an agent-written repro needs `tests` globs in [loop]")
     planted = [] if repro_file is None else [f"{rules.repro_dir}/{repro_file.name}"]
@@ -462,15 +492,46 @@ def run_loop(
         red = _result("repro", ran)
         if red.ok:
             return result("not_red", setup_s, red, [])
+    # 3. fix loop, then 4. three tries used up: a human takes over
+    attempts = fix(
+        spec=spec,
+        rules=rules,
+        worktree=worktree,
+        agent=agent,
+        sandbox=sandbox,
+        repro=repro,
+        planted=planted,
+        failed=[red],
+        instructions=instructions,
+    )
+    status: Status = "green" if attempts[-1].green else "escalated"
+    return result(status, setup_s, red, attempts)
+
+
+def fix(
+    *,
+    spec: Spec,
+    rules: Rules,
+    worktree: Path,
+    agent: Agent,
+    sandbox: Sandbox,
+    repro: list[str],
+    planted: list[str],
+    failed: list[CheckResult],
+    instructions: str = INSTRUCTIONS,
+    context: tuple[str, ...] = (),
+) -> list[Attempt]:
+    """The implementer's attempts until repro and checks are green, at most
+    MAX_ATTEMPTS: agent edits -> protected files and the repro put back ->
+    checks. `failed`: what the first prompt shows (the red repro);
+    `context`: more for every prompt, already fenced (the review gate's
+    findings)."""
     repro_cmd = repro_command(rules, repro)
     originals = {p: (worktree / p).read_bytes() for p in repro}
-
-    # 3. fix loop: agent edits -> protected files put back -> checks
     attempts: list[Attempt] = []
-    failed = [red]  # what the next prompt shows; first the red repro
     for n in range(1, MAX_ATTEMPTS + 1):
         current = diff(worktree, planted) if n > 1 else ""
-        text = prompt(spec, rules, repro, failed, n, current)
+        text = prompt(spec, rules, repro, failed, n, current, instructions, context)
         try:
             run = agent(text, Implemented.model_json_schema(), worktree)
             summary, error = Implemented.model_validate(run.output).summary, ""
@@ -492,7 +553,6 @@ def run_loop(
         )
         attempts.append(attempt)
         if attempt.green:
-            return result("green", setup_s, red, attempts)
+            break
         failed = [c for c in checks if not c.ok]  # errors only, to the next try
-    # 4. three tries used up: a human takes over
-    return result("escalated", setup_s, red, attempts)
+    return attempts
