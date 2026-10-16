@@ -1,0 +1,30 @@
+diff --git a/src/lib/chat/store.ts b/src/lib/chat/store.ts
+index 8a1f17c..4dd296d 100644
+--- a/src/lib/chat/store.ts
++++ b/src/lib/chat/store.ts
+@@ -98,11 +98,20 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
+     case "clear":
+       return initialState;
+     case "sync": {
+-      // Merge by id: the other tab's chats are added, ours win on conflicts, so nothing in progress is lost.
+-      const byId = new Map(action.incoming.chats.map((c) => [c.id, c]));
+-      for (const c of state.chats) byId.set(c.id, c);
+-      const chats = [...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+-      return { chats, activeId: state.activeId ?? chats[0]?.id ?? null };
++      const kept = action.keepChatId
++        ? state.chats.find((c) => c.id === action.keepChatId)
++        : undefined;
++      const incoming = action.incoming.chats;
++      const chats = !kept
++        ? incoming
++        : incoming.some((c) => c.id === kept.id)
++          ? incoming.map((c) => (c.id === kept.id ? kept : c))
++          : [kept, ...incoming];
++      // The open chat is this tab's choice; fall back only when it no longer exists.
++      const activeId = chats.some((c) => c.id === state.activeId)
++        ? state.activeId
++        : (chats[0]?.id ?? null);
++      return { chats, activeId };
+     }
+     case "send":
+       return mapChat(state, action.chatId, (c) => ({

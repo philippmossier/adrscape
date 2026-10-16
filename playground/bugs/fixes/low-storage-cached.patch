@@ -1,0 +1,28 @@
+diff --git a/src/lib/hardware/recommend.ts b/src/lib/hardware/recommend.ts
+index 48dc981..f09d870 100644
+--- a/src/lib/hardware/recommend.ts
++++ b/src/lib/hardware/recommend.ts
+@@ -81,13 +81,7 @@ export function recommend(
+     else if (tier < sweet) fit = "good";
+     else if (tier === sweet + 1) fit = "slow";
+     else fit = "not-advised";
+-    return {
+-      model,
+-      fit,
+-      backend,
+-      downloadMB,
+-      lowStorage: isLowStorage(p, model.downloadMB[backend.dtype]),
+-    };
++    return { model, fit, backend, downloadMB, lowStorage: isLowStorage(p, downloadMB) };
+   });
+ 
+   // The sweet spot can be capped away (memory, mobile); keep a recommendation whenever one model is usable.
+@@ -126,7 +120,7 @@ function recommendFromMeasurement(
+       backend,
+       downloadMB,
+       estimatedTps,
+-      lowStorage: isLowStorage(p, model.downloadMB[backend.dtype]),
++      lowStorage: isLowStorage(p, downloadMB),
+     };
+   });
+ 

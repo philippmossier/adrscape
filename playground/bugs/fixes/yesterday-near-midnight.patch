@@ -1,0 +1,23 @@
+diff --git a/src/lib/chat/time.ts b/src/lib/chat/time.ts
+index bcf2604..ed0ceb2 100644
+--- a/src/lib/chat/time.ts
++++ b/src/lib/chat/time.ts
+@@ -2,12 +2,17 @@ import { lang } from "../lang";
+ 
+ const DAY = 24 * 60 * 60_000;
+ 
++const startOfDay = (ms: number) => {
++  const d = new Date(ms);
++  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
++};
++
+ /**
+  * "Today 8:13 PM", "Yesterday 6:45 PM", "Friday 12:33 PM" (within the last week), "Sat, Sep 19 at 1:21 AM" (older),
+  * in the browser's language and clock style, from the platform's own date formatting (no strings to maintain).
+  */
+ export function messageTime(at: number, now: number, locale: string = lang): string {
+-  const days = Math.floor((now - at) / DAY);
++  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY);
+   const when = new Date(at);
+   const time = when.toLocaleTimeString(locale, {
+     hour: locale === "de" ? "2-digit" : "numeric",

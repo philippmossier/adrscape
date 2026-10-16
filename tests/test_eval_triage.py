@@ -45,7 +45,7 @@ def test_the_committed_seed_is_consistent() -> None:
         Path("targets"), "philippmossier/local-ai-chat-playground"
     )
 
-    assert 15 <= len(seed) <= 30
+    assert 15 <= len(seed) <= 60  # 24 hand-written + 22 planted bugs
     assert 3 <= sum(s.injected is not None for s in seed) <= 5
     assert sum(s.duplicate_of is not None for s in seed) >= 3
     assert {s.component for s in seed} - {None} <= set(components)

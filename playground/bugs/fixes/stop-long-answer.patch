@@ -1,0 +1,12 @@
+diff --git a/src/components/chat-composer.tsx b/src/components/chat-composer.tsx
+index a5a9d18..43f5c89 100644
+--- a/src/components/chat-composer.tsx
++++ b/src/components/chat-composer.tsx
+@@ -95,7 +95,6 @@ export function ChatComposer({
+               size="icon-sm"
+               className="ml-auto rounded-full"
+               onClick={onStop}
+-              disabled={!canSend}
+               aria-label={tr("Stop", "Stopp")}
+             >
+               <SquareIcon />

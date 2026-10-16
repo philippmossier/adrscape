@@ -1,0 +1,38 @@
+diff --git a/src/lib/chat/store.ts b/src/lib/chat/store.ts
+index 4dd296d..3490f29 100644
+--- a/src/lib/chat/store.ts
++++ b/src/lib/chat/store.ts
+@@ -125,25 +125,15 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
+         ],
+       }));
+     case "token":
+-      return mapMessage(
+-        state,
+-        state.activeId ?? action.chatId,
+-        action.messageId,
+-        (m) => ({
+-          ...m,
+-          content: m.content + action.text,
+-        }),
+-      );
++      return mapMessage(state, action.chatId, action.messageId, (m) => ({
++        ...m,
++        content: m.content + action.text,
++      }));
+     case "finish":
+-      return mapMessage(
+-        state,
+-        state.activeId ?? action.chatId,
+-        action.messageId,
+-        (m) => ({
+-          ...m,
+-          stats: action.stats,
+-        }),
+-      );
++      return mapMessage(state, action.chatId, action.messageId, (m) => ({
++        ...m,
++        stats: action.stats,
++      }));
+     case "fail":
+       return mapMessage(state, action.chatId, action.messageId, (m) => ({
+         ...m,

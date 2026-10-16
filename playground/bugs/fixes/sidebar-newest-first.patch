@@ -1,0 +1,13 @@
+diff --git a/src/components/chat-sidebar.tsx b/src/components/chat-sidebar.tsx
+index 8115701..dde8efc 100644
+--- a/src/components/chat-sidebar.tsx
++++ b/src/components/chat-sidebar.tsx
+@@ -43,7 +43,7 @@ export function ChatSidebar({
+ 
+   const visible = chats
+     .filter((c) => c.messages.length > 0)
+-    .sort((a, b) => a.updatedAt - b.updatedAt);
++    .sort((a, b) => b.updatedAt - a.updatedAt);
+   const closeOnPhone = () => isMobile && setOpenMobile(false);
+ 
+   return (

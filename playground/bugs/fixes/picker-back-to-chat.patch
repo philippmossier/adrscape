@@ -1,0 +1,12 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 48c124a..8823ea4 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -193,6 +193,7 @@ export function App() {
+       localStorage.setItem(PREFS.MODEL_KEY, option.model.id);
+       markModelComplete(option.model.repo, option.model.revision, option.backend.dtype);
+       setCached((c) => new Set(c).add(option.model.id));
++      setLoaded(option);
+       setStage({ name: "chat", option });
+     } catch (err) {
+       if (cancelled.current) return;

@@ -1,0 +1,15 @@
+diff --git a/src/lib/chat/store.ts b/src/lib/chat/store.ts
+index 3490f29..584e83a 100644
+--- a/src/lib/chat/store.ts
++++ b/src/lib/chat/store.ts
+@@ -160,7 +160,9 @@ export function deserialize(raw: string | null): ChatState {
+       ...c,
+       updatedAt: typeof c.updatedAt === "number" ? c.updatedAt : c.createdAt,
+     }));
+-    const activeId = chats[0]?.id ?? null;
++    const activeId = chats.some((c) => c.id === data.activeId)
++      ? (data.activeId ?? null)
++      : (chats[0]?.id ?? null);
+     return { chats, activeId };
+   } catch {
+     return initialState;

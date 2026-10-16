@@ -1,0 +1,13 @@
+diff --git a/src/lib/models/seen.ts b/src/lib/models/seen.ts
+index c4dd8a3..eeb201f 100644
+--- a/src/lib/models/seen.ts
++++ b/src/lib/models/seen.ts
+@@ -6,7 +6,7 @@ export const SEEN_MODELS_KEY = "local-ai-chat:seen-models";
+  * catalog is simply remembered.
+  */
+ export function unseenModels(seen: string[] | null, catalogIds: string[]): string[] {
+-  return catalogIds.filter((id) => !(seen ?? []).includes(id));
++  return seen === null ? [] : catalogIds.filter((id) => !seen.includes(id));
+ }
+ 
+ export function readSeenModels(): string[] | null {

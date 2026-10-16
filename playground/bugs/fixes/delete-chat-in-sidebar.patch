@@ -1,0 +1,13 @@
+diff --git a/src/components/chat-sidebar.tsx b/src/components/chat-sidebar.tsx
+index dde8efc..a457a4f 100644
+--- a/src/components/chat-sidebar.tsx
++++ b/src/components/chat-sidebar.tsx
+@@ -96,7 +96,7 @@ export function ChatSidebar({
+                           aria-label={tr("Confirm delete", "Löschen bestätigen")}
+                           onClick={() => {
+                             setConfirming(null);
+-                            onDelete(activeId ?? c.id);
++                            onDelete(c.id);
+                           }}
+                         >
+                           <CheckIcon className="size-4" />

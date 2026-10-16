@@ -1,0 +1,172 @@
+# Planted bugs in github.com/philippmossier/local-ai-chat-playground: the
+# answer key for refine and the core loop (0.2).
+#
+# Each bug was planted in the playground's code on purpose, so the truth is
+# known by construction and no model has seen the fix in training. The issue
+# a user would file is the entry with the same `key` in seed.toml.
+#
+#   kind    logic (repro in vitest) | ui (repro in Playwright, fake engine)
+#   size    S one line | M a few lines or two places | L a rewrite with a design call
+#   files   the files the fix changes (truth for refine's hit@k)
+#   repro   bugs/repro/<file>: red on the planted code, green with the fix.
+#           A vitest file goes to src/repro/, a Playwright spec to e2e/repro/.
+#   fix     bugs/fixes/<key>.patch: the reference fix (code only), applies
+#           to the planted code with `git apply`
+#
+# Each bug is isolated: its repro turns green when only its own fix is
+# applied. Where an existing test of the playground guarded a bug, that test
+# case was removed with the plant (a coverage gap, as in a real repo).
+
+[[bug]]
+key = "title-ellipsis"
+kind = "logic"
+size = "S"
+files = ["src/lib/chat/store.ts"]
+repro = "title-ellipsis.test.ts"
+
+[[bug]]
+key = "low-memory-reason"
+kind = "logic"
+size = "M"
+files = ["src/lib/labels.ts"]
+repro = "low-memory-reason.test.ts"
+
+[[bug]]
+key = "reload-active-chat"
+kind = "logic"
+size = "S"
+files = ["src/lib/chat/store.ts"]
+repro = "reload-active-chat.test.ts"
+
+[[bug]]
+key = "yesterday-near-midnight"
+kind = "logic"
+size = "M"
+files = ["src/lib/chat/time.ts"]
+repro = "yesterday-near-midnight.test.ts"
+
+[[bug]]
+key = "too-slow-suggests-lighter"
+kind = "logic"
+size = "S"
+files = ["src/lib/hardware/advice.ts"]
+repro = "too-slow-suggests-lighter.test.ts"
+
+[[bug]]
+key = "low-storage-cached"
+kind = "logic"
+size = "M"
+files = ["src/lib/hardware/recommend.ts"]
+repro = "low-storage-cached.test.ts"
+
+[[bug]]
+key = "model-host-lookalike"
+kind = "logic"
+size = "S"
+files = ["src/lib/privacy/network.ts"]
+repro = "model-host-lookalike.test.ts"
+
+[[bug]]
+key = "first-visit-new-models"
+kind = "logic"
+size = "S"
+files = ["src/lib/models/seen.ts"]
+repro = "first-visit-new-models.test.ts"
+
+[[bug]]
+key = "answer-into-its-chat"
+kind = "logic"
+size = "M"
+files = ["src/lib/chat/store.ts"]
+repro = "answer-into-its-chat.test.ts"
+
+[[bug]]
+key = "sync-other-tab"
+kind = "logic"
+size = "L"
+files = ["src/lib/chat/store.ts"]
+repro = "sync-other-tab.test.ts"
+
+[[bug]]
+key = "shift-enter-newline"
+kind = "ui"
+size = "S"
+files = ["src/components/chat-composer.tsx"]
+repro = "shift-enter-newline.spec.ts"
+
+[[bug]]
+key = "input-cleared-after-send"
+kind = "ui"
+size = "S"
+files = ["src/components/chat.tsx"]
+repro = "input-cleared-after-send.spec.ts"
+
+[[bug]]
+key = "stop-long-answer"
+kind = "ui"
+size = "S"
+files = ["src/components/chat-composer.tsx"]
+repro = "stop-long-answer.spec.ts"
+
+[[bug]]
+key = "delete-chat-in-sidebar"
+kind = "ui"
+size = "S"
+files = ["src/components/chat-sidebar.tsx"]
+repro = "delete-chat-in-sidebar.spec.ts"
+
+[[bug]]
+key = "sidebar-newest-first"
+kind = "ui"
+size = "S"
+files = ["src/components/chat-sidebar.tsx"]
+repro = "sidebar-newest-first.spec.ts"
+
+[[bug]]
+key = "copy-button-under-answer"
+kind = "ui"
+size = "S"
+files = ["src/components/message.tsx"]
+repro = "copy-button-under-answer.spec.ts"
+
+[[bug]]
+key = "new-chat-button"
+kind = "ui"
+size = "S"
+files = ["src/App.tsx"]
+repro = "new-chat-button.spec.ts"
+
+[[bug]]
+key = "answer-link-new-tab"
+kind = "ui"
+size = "S"
+files = ["src/components/message.tsx"]
+repro = "answer-link-new-tab.spec.ts"
+
+[[bug]]
+key = "picker-back-to-chat"
+kind = "ui"
+size = "S"
+files = ["src/App.tsx"]
+repro = "picker-back-to-chat.spec.ts"
+
+[[bug]]
+key = "model-remembers-earlier-turns"
+kind = "ui"
+size = "M"
+files = ["src/App.tsx"]
+repro = "model-remembers-earlier-turns.spec.ts"
+
+[[bug]]
+key = "send-after-error"
+kind = "ui"
+size = "M"
+files = ["src/App.tsx"]
+repro = "send-after-error.spec.ts"
+
+[[bug]]
+key = "answer-image-no-request"
+kind = "ui"
+size = "S"
+files = ["src/components/message.tsx"]
+repro = "answer-image-no-request.spec.ts"

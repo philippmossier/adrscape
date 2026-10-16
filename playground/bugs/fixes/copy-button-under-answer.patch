@@ -1,0 +1,13 @@
+diff --git a/src/components/message.tsx b/src/components/message.tsx
+index adddff6..07b21a8 100644
+--- a/src/components/message.tsx
++++ b/src/components/message.tsx
+@@ -72,7 +72,7 @@ export function ChatMessage({
+             </BubbleContent>
+           </Bubble>
+         )}
+-        {stats && streaming && (
++        {stats && !streaming && (
+           <MessageFooter className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+             <span>
+               {tr(

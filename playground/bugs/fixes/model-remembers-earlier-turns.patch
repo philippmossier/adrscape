@@ -1,0 +1,23 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 151e7c9..48c124a 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -48,9 +48,6 @@ type Stage =
+ const SYSTEM_PROMPT =
+   "You are a helpful, honest assistant running privately on the user's own device. Keep answers concise and reply in the language the user writes in. Write plain text and Markdown only: no LaTeX, write formulas like H2O or CO2 in plain characters.";
+ 
+-/** Earlier turns sent with each message; the worker trims further to fit the context window. */
+-const HISTORY_TURNS = 1;
+-
+ type Advice = Exclude<SpeedAdvice, { kind: "ok" }> & { tokensPerSecond: number };
+ 
+ export function App() {
+@@ -248,7 +245,7 @@ export function App() {
+       try {
+         const messages = [
+           { role: "system" as const, content: SYSTEM_PROMPT },
+-          ...(history ? toModelMessages(history).slice(-HISTORY_TURNS) : []),
++          ...(history ? toModelMessages(history) : []),
+           { role: "user" as const, content: text },
+         ];
+         const stats = await getEngine().generate(messages, (piece) => {

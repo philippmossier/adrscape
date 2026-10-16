@@ -1,0 +1,15 @@
+diff --git a/src/components/message.tsx b/src/components/message.tsx
+index b1ac65c..f09174b 100644
+--- a/src/components/message.tsx
++++ b/src/components/message.tsx
+@@ -9,8 +9,9 @@ import { messageTime } from "~/lib/chat/time";
+ import { decimal } from "~/lib/format";
+ import { tr } from "~/lib/lang";
+ 
+-/** Model output is untrusted: links open in a new tab. */
++/** Model output is untrusted: no remote images (they would be a request), links open in a new tab. */
+ const markdownComponents = {
++  img: ({ alt }: { alt?: string }) => (alt ? <span>{alt}</span> : null),
+   a: ({ children, href }: { children?: React.ReactNode; href?: string }) => (
+     <a href={href} rel="noopener noreferrer">
+       {children}

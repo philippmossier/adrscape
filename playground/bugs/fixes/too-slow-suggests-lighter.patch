@@ -1,0 +1,13 @@
+diff --git a/src/lib/hardware/advice.ts b/src/lib/hardware/advice.ts
+index 30afbe3..0293e67 100644
+--- a/src/lib/hardware/advice.ts
++++ b/src/lib/hardware/advice.ts
+@@ -26,7 +26,7 @@ export function adviseFromSpeed(
+   if (tokens < MIN_TOKENS_FOR_ADVICE) return { kind: "ok" };
+ 
+   if (tokensPerSecond < TOO_SLOW_TPS) {
+-    const lighter = neighbour(current, 1);
++    const lighter = neighbour(current, -1);
+     if (lighter) return { kind: "too-slow", suggest: lighter };
+     return { kind: "ok" };
+   }

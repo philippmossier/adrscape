@@ -1,0 +1,13 @@
+diff --git a/src/components/chat-composer.tsx b/src/components/chat-composer.tsx
+index 43f5c89..32e7ce1 100644
+--- a/src/components/chat-composer.tsx
++++ b/src/components/chat-composer.tsx
+@@ -52,7 +52,7 @@ export function ChatComposer({
+           value={value}
+           onChange={(e) => onChange(e.target.value)}
+           onKeyDown={(e) => {
+-            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
++            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+               e.preventDefault();
+               if (canSend) onSend();
+             }

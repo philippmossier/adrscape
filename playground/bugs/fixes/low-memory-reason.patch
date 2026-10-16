@@ -1,0 +1,15 @@
+diff --git a/src/lib/labels.ts b/src/lib/labels.ts
+index cf9e8d9..61d21b9 100644
+--- a/src/lib/labels.ts
++++ b/src/lib/labels.ts
+@@ -51,6 +51,10 @@ export function reasonText(id: ReasonId, gbs: number): string {
+         "Diese Seite muss über eine sichere Verbindung (https) geöffnet werden, damit das Modell auf Ihrem Gerät gespeichert werden kann.",
+       );
+     case "hw.lowMemory":
++      return tr(
++        "Your device reports little memory, so only the smallest model is offered.",
++        "Ihr Gerät meldet wenig Arbeitsspeicher, daher wird nur das kleinste Modell angeboten.",
++      );
+     case "hw.mobile":
+       return tr(
+         "On phones and tablets only the smallest model is offered, to save battery and data.",

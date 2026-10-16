@@ -288,3 +288,212 @@ component = "models"
 body = """
 The README says the smallest model is 570 MB. On my laptop without WebGPU the picker shows 919 MB for Qwen3 0.6B and that is what it downloaded. The README table only seems to list the GPU sizes; please add the CPU ones.
 """
+
+# Planted bugs (0.2): the answer key is bugs.toml, same keys.
+
+[[issue]]
+key = "title-ellipsis"
+title = "Chat title is cut off with \"…\" even though it fits"
+type = "bug"
+component = "chat"
+body = """
+I asked "What is the difference between RAM and VRAM?" plus a few words and the sidebar shows the title with a "…" at the end, but nothing is actually missing. Longer questions look fine. Minor, just looks sloppy.
+"""
+
+[[issue]]
+key = "low-memory-reason"
+title = "Welcome page says I'm on a phone, I'm on a Chromebook"
+type = "bug"
+component = "ui"
+body = """
+Under "Your computer" it says "On phones and tablets only the smallest model is offered, to save battery and data." I'm on a Chromebook with 4 GB of RAM, not a phone. Only the small model being offered is fine, but the reason is wrong and confused my colleague.
+"""
+
+[[issue]]
+key = "reload-active-chat"
+title = "After reloading, the app opens a different chat than the one I was in"
+type = "bug"
+component = "chat"
+body = """
+Steps:
+1. Have a few chats
+2. Click an older one in the sidebar
+3. Reload the page
+
+It opens some other chat, not the one I was reading. I have to find it again in the sidebar every time.
+"""
+
+[[issue]]
+key = "yesterday-near-midnight"
+title = "Message from last night says \"Today\""
+type = "bug"
+component = "chat"
+body = """
+I wrote something at 11:50 PM and checked again at 12:10 AM. The message says "Today 11:50 PM". It was yesterday. Same thing the morning after for messages from the late evening two days ago, they show "Yesterday".
+"""
+
+[[issue]]
+key = "too-slow-suggests-lighter"
+title = "App says my computer is too slow, then suggests a BIGGER model"
+type = "bug"
+component = "hardware-check"
+body = """
+After the first answer (which was really slow, maybe 3 words per second) a banner said it's too slow and offered to switch to... Gemma 4 E4B, which is the biggest one. That would make it even slower? I was on Gemma 4 E2B.
+"""
+
+[[issue]]
+key = "low-storage-cached"
+title = "Low storage warning on a model that's already on my laptop"
+type = "bug"
+component = "hardware-check"
+body = """
+My disk is almost full. The model picker warns "not enough free space" on the model I downloaded last week and use every day. It shows "Already on this device" right next to the warning. Which one is true?
+"""
+
+[[issue]]
+key = "model-host-lookalike"
+title = "Privacy panel files an unknown host under model downloads"
+type = "bug"
+component = "privacy"
+body = """
+I was testing the privacy panel with a proxy that rewrites some requests and noticed a request to `evilhf.co` (not a real HF domain) was listed under "Model files (download only, nothing is uploaded)". Shouldn't anything that isn't Hugging Face be in "Other"? For a panel that's supposed to prove what leaves the device this seems important.
+"""
+
+[[issue]]
+key = "first-visit-new-models"
+title = "\"Neue Modelle verfügbar\" beim allerersten Besuch"
+type = "bug"
+component = "models"
+body = """
+Ich habe die App zum ersten Mal geöffnet (frisches Browserprofil), das Modell gestartet, und sofort kam die Meldung "Neue Modelle verfügbar" mit einer Liste. Neu im Vergleich zu was? Ich war vorher nie da.
+"""
+
+[[issue]]
+key = "answer-into-its-chat"
+title = "Answer gets lost if I click another chat while it's writing"
+type = "bug"
+component = "chat"
+body = """
+Asked a long question, and while the answer was being written I clicked an older chat in the sidebar to look something up. When I went back, my question was there but the answer was empty. No error. Happens every time.
+"""
+
+[[issue]]
+key = "sync-other-tab"
+title = "Deleted chats come back when the app is open in another tab"
+type = "bug"
+component = "chat"
+body = """
+I had the app open in two tabs. Deleted some old chats in one tab, and the next time I used the other tab they were all back. Also, messages I wrote in tab 1 don't show up in tab 2 if that chat was already open there.
+"""
+
+[[issue]]
+key = "shift-enter-newline"
+title = "Can't write multi-line messages, Shift+Enter sends right away"
+type = "bug"
+component = "chat"
+body = """
+The placeholder says Shift+Enter for a new line, but Shift+Enter sends the message immediately. I wanted to paste a list with line breaks.
+
+Chrome on macOS.
+"""
+
+[[issue]]
+key = "input-cleared-after-send"
+title = "My message stays in the input after sending"
+type = "bug"
+component = "chat"
+body = """
+After I press Enter the message is sent (and answered), but the text is still in the box. I have to delete it by hand every time.
+"""
+
+[[issue]]
+key = "stop-long-answer"
+title = "Stop button is greyed out, can't stop a long answer"
+type = "bug"
+component = "chat"
+body = """
+When the model starts rambling I want to stop it, but the square stop button is disabled while it writes. I have to wait until it's done.
+"""
+
+[[issue]]
+key = "delete-chat-in-sidebar"
+title = "Deleted an old chat and my current conversation was gone instead"
+type = "bug"
+component = "chat"
+body = """
+I hovered an old chat in the sidebar, clicked the trash icon and confirmed. The old chat is still there, but the conversation I had open is gone. Lost a long chat this way. Please fix, this is data loss.
+"""
+
+[[issue]]
+key = "sidebar-newest-first"
+title = "Newest chats are at the bottom of the list"
+type = "bug"
+component = "chat"
+body = """
+The chat history in the sidebar is sorted oldest first, so with a lot of chats I have to scroll down every time to find the one from today.
+"""
+
+[[issue]]
+key = "copy-button-under-answer"
+title = "Copy button under answers is gone"
+type = "bug"
+component = "chat"
+body = """
+There used to be a Copy button and the speed (tokens/s) under each answer. Both are missing now, on old and new answers.
+"""
+
+[[issue]]
+key = "new-chat-button"
+title = "\"Neuer Chat\" Button macht nichts"
+type = "bug"
+component = "chat"
+body = """
+Wenn ich in einem Chat schon etwas geschrieben habe und auf "Neuer Chat" klicke, passiert nichts. Ich bleibe im alten Chat. Nur ganz am Anfang funktioniert der Button.
+"""
+
+[[issue]]
+key = "answer-link-new-tab"
+title = "Clicking a link in an answer navigates away from my chat"
+type = "bug"
+component = "chat"
+body = """
+The model gave me a link to the docs, I clicked it and the whole app was replaced by that page. Going back in the browser restarts the app and the model has to load again. Links should open in a new tab.
+"""
+
+[[issue]]
+key = "picker-back-to-chat"
+title = "Back from \"change model\" throws me out to the start page"
+type = "bug"
+component = "models"
+body = """
+In a chat I clicked the model name to look at the other models, then "Back". Instead of my chat I'm on the welcome page and have to start the model again.
+"""
+
+[[issue]]
+key = "model-remembers-earlier-turns"
+title = "The model doesn't remember what I said one message ago"
+type = "bug"
+component = "chat"
+body = """
+I told it my name, it answered, then I asked "what's my name?" and it had no idea. Follow-up questions never work, every message is treated like a new conversation. Tried two different models.
+"""
+
+[[issue]]
+key = "send-after-error"
+title = "After an error the chat is stuck, can't send anything"
+type = "bug"
+component = "chat"
+body = """
+Got "Something went wrong: ..." on one answer (probably memory). After that the stop button stays there forever and I can't send another message. Only a reload helps.
+"""
+
+[[issue]]
+key = "answer-image-no-request"
+title = "Answer with an image made a request to some other server"
+type = "bug"
+component = "privacy"
+body = """
+I asked the model to show a picture and it answered with Markdown image syntax. In the dev tools network tab I can see the browser loading that image from the internet, from a server I don't know.
+
+Isn't the whole point that nothing leaves my device? Running the dev server (`pnpm dev`), not the deployed version.
+"""

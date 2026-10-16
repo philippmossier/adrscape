@@ -1,0 +1,13 @@
+diff --git a/src/lib/privacy/network.ts b/src/lib/privacy/network.ts
+index 06d70ea..bd9897c 100644
+--- a/src/lib/privacy/network.ts
++++ b/src/lib/privacy/network.ts
+@@ -15,7 +15,7 @@ export interface NetworkSummary {
+   requestsAfterFirstMessage: number | null;
+ }
+ 
+-const MODEL_HOSTS = [/(^|\.)huggingface\.co$/, /hf\.co$/];
++const MODEL_HOSTS = [/(^|\.)huggingface\.co$/, /(^|\.)hf\.co$/];
+ 
+ export function classifyHost(host: string, ownHost: string): HostKind {
+   if (host === ownHost) return "app";

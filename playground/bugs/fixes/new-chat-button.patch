@@ -1,0 +1,13 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 8823ea4..58c157c 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -318,7 +318,7 @@ export function App() {
+   );
+ 
+   const newChat = () => {
+-    if (!active || active.messages.length === 0)
++    if (!active || active.messages.length > 0)
+       dispatch({ type: "new", id: crypto.randomUUID(), now: Date.now() });
+   };
+ 
