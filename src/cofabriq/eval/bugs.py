@@ -56,3 +56,7 @@ def planted_for(title: str, bugs: list[PlantedBug], seed: Path) -> PlantedBug | 
 
 def repro_path(bugs_file: Path, bug: PlantedBug) -> Path:
     return bugs_file.parent / "bugs" / "repro" / bug.repro
+
+
+def fix_path(bugs_file: Path, bug: PlantedBug) -> Path:
+    return bugs_file.parent / "bugs" / "fixes" / f"{bug.key}.patch"

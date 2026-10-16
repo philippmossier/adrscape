@@ -34,7 +34,13 @@ from cofabriq.eval import loop as loop_eval
 from cofabriq.eval import readiness as readiness_eval
 from cofabriq.eval import refine as refine_eval
 from cofabriq.eval import triage as triage_eval
-from cofabriq.eval.bugs import PlantedBug, load_bugs, planted_for, repro_path
+from cofabriq.eval.bugs import (
+    PlantedBug,
+    fix_path,
+    load_bugs,
+    planted_for,
+    repro_path,
+)
 from cofabriq.issues import triage as triage_mod
 from cofabriq.issues import vectors
 from cofabriq.issues import verdict as verdict_mod
@@ -957,14 +963,17 @@ def run(
     spec: Path | None = None,
     yes: bool = False,
     keep: bool = False,
+    planted: bool = False,
     bugs: Path = Path("playground/bugs.toml"),
     seed: Path = Path("playground/seed.toml"),
 ) -> None:
-    """The core loop for one planted logic bug: refine, plan gate, repro red,
-    the agent fixes it, repro and checks in a container, max 3 attempts
-    (paid). `--spec` takes a `refine --json` file instead of a new refine
-    run (the dev may edit it); `--yes` skips the plan gate; `--keep` leaves
-    the worktree in data/work/. The result goes to data/runs/."""
+    """The core loop for one issue: refine, plan gate, the agent writes a
+    failing test, then fixes the code, repro and checks in a container, max
+    3 attempts each (paid). On a planted logic bug the planted repro judges
+    the result afterwards; `--planted` hands it to the agent instead.
+    `--spec` takes a `refine --json` file instead of a new refine run (the
+    dev may edit it); `--yes` skips the plan gate; `--keep` leaves the
+    worktree in data/work/. The result goes to data/runs/."""
     settings = get_settings()
     target = check_repo(repo)
     rules = run_mod.load_rules(settings.targets_dir, target)
@@ -982,14 +991,14 @@ def run(
         typer.echo(f"#{number} is not in {settings.issues_dir}", err=True)
         raise typer.Exit(code=1)
     bug = planted_for(issue.title, load_bugs(bugs, seed), seed)
-    if bug is None or bug.kind != "logic":
-        typer.echo(
-            f"#{number} is not a planted logic bug: no repro (the agent "
-            "writes its own repro later)",
-            err=True,
-        )
+    if bug is not None and bug.kind != "logic":
+        bug = None  # a UI bug's repro is Playwright: not run by the loop yet
+    if planted and bug is None:
+        typer.echo(f"#{number} is not a planted logic bug: no repro", err=True)
         raise typer.Exit(code=1)
-    steps.note("repro", f"{bug.key}: {bug.repro}")
+    if bug is not None:
+        role = "handed to the agent" if planted else "judges the result"
+        steps.note("repro", f"planted {bug.key} ({bug.repro}) {role}")
     if spec is not None:
         refined = refine_mod.Refined.model_validate_json(spec.read_text("utf-8"))
         if (refined.repo, refined.number) != (target, number):
@@ -1009,6 +1018,7 @@ def run(
     if not yes and not typer.confirm("Approve the plan and let the agent edit?"):
         raise typer.Exit(code=1)
     worktree = settings.work_dir / f"{target.replace('/', '-')}-{number}"
+    sandbox = Podman(image=rules.image, setup=rules.setup)
     with steps.step("loop", f"repro, fix, checks in {worktree}") as done:
         try:
             result = run_mod.run_loop(
@@ -1018,50 +1028,85 @@ def run(
                 spec=refined.spec,
                 clone=clone,
                 worktree=worktree,
-                repro_file=repro_path(bugs, bug),
+                repro_file=repro_path(bugs, bug) if planted and bug else None,
                 rules=rules,
                 agent=agent.editing(budget_usd=1.0),
-                sandbox=Podman(image=rules.image, setup=rules.setup),
+                sandbox=sandbox,
             )
+            # no verdicts by default: an issue without a planted bug has no
+            # answer key, and with --planted the agent already had the repro
+            judged = loop_eval.Judged(result=result)
+            if bug is not None and not planted:
+                if keep:  # validity resets the code: keep the fix to look at
+                    judged.judge = loop_eval.judge(
+                        worktree, rules, repro_path(bugs, bug), sandbox
+                    )
+                else:
+                    judged = loop_eval.against_key(
+                        result,
+                        worktree,
+                        rules,
+                        repro_path(bugs, bug),
+                        fix_path(bugs, bug),
+                        sandbox,
+                    )
         finally:
             if not keep:
                 run_mod.remove_worktree(clone, worktree)
         tries = len(result.attempts)
         done(f"{result.status}, {tries} attempts, ${result.cost_usd:.3f}")
-    _show_loop(result)
+    _show_loop(judged)
     out = settings.runs_dir / (
         f"{target.replace('/', '-')}-{number}-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
     )
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(result.model_dump_json(indent=2), "utf-8")
+    out.write_text(judged.model_dump_json(indent=2), "utf-8")
     typer.echo(f"-> {out}")
-    if result.status != "green":
+    if result.status != "green" or (judged.judge is not None and not judged.judge.ok):
         raise typer.Exit(code=2)
 
 
-def _show_loop(result: run_mod.LoopResult) -> None:
-    """The trace per node, then the diff. Agent text goes in as `Text`."""
+def _show_loop(judged: loop_eval.Judged) -> None:
+    """The trace per node, then the verdicts and the diff. Agent text goes
+    in as `Text`."""
+    result = judged.result
     out = Console(highlight=False, soft_wrap=True)
-    out.print(Text(f"setup  {result.setup_s:.0f} s (worktree, install)"))
+
+    def attempts(node: str, items: list[run_mod.Attempt]) -> None:
+        for a in items:
+            run = a.run
+            agent = (
+                f"${run.cost_usd:.3f} {run.turns} turns {run.latency_ms / 1000:.0f} s"
+                if run is not None
+                else f"failed: {a.error}"
+            )
+            checks = " ".join(
+                f"{c.name}:{'ok' if c.ok else 'FAIL'}({c.seconds:.0f}s)"
+                for c in a.checks
+            )
+            out.print(Text(f"{node} {a.n}  agent {agent} | {checks}"))
+            if a.reverted:
+                reverted = ", ".join(a.reverted)
+                out.print(Text(f"         reverted: {reverted}", style="yellow"))
+            if a.summary:
+                out.print(Padding(Text(a.summary), (0, 0, 0, 9)))
+
+    out.print(Text(f"setup    {result.setup_s:.0f} s (worktree, install)"))
+    attempts("repro", result.reproduce)
     if result.red is not None:
         state = "red" if not result.red.ok else "green before any change"
-        out.print(Text(f"repro  {state}, {result.red.seconds:.0f} s"))
-    for a in result.attempts:
-        run = a.run
-        agent = (
-            f"${run.cost_usd:.3f} {run.turns} turns {run.latency_ms / 1000:.0f} s"
-            if run is not None
-            else f"failed: {a.error}"
-        )
-        checks = " ".join(
-            f"{c.name}:{'ok' if c.ok else 'FAIL'}({c.seconds:.0f}s)" for c in a.checks
-        )
-        out.print(Text(f"try {a.n}  agent {agent} | {checks}"))
-        if a.reverted:
-            out.print(Text(f"       reverted: {', '.join(a.reverted)}", style="yellow"))
-        if a.summary:
-            out.print(Padding(Text(a.summary), (0, 0, 0, 7)))
+        source = "planted" if result.planted else "the agent's"
+        line = f"{source} {', '.join(result.repro)}: {state}"
+        out.print(Text(f"repro    {line}, {result.red.seconds:.0f} s"))
+    attempts("fix", result.attempts)
     out.print(Text(f"{result.status}: {', '.join(result.changed) or 'no changes'}"))
+    for name, check, meaning in [
+        ("judge", judged.judge, "the planted repro on the fix"),
+        ("valid", judged.valid, "the agent's repro with the reference fix"),
+    ]:
+        if check is not None:
+            verdict = "green" if check.ok else "RED"
+            out.print(Text(f"{name}    {verdict} ({meaning})"))
     if result.diff:
         out.print(Text(result.diff))
 
@@ -1163,14 +1208,17 @@ def eval_loop(
     repo: str = "philippmossier/local-ai-chat-playground",
     only: str | None = None,
     workers: int = 4,
+    planted: bool = False,
     bugs: Path = Path("playground/bugs.toml"),
     seed: Path = Path("playground/seed.toml"),
 ) -> None:
-    """The core loop on the planted logic bugs: resolved (repro and checks
-    green within 3 attempts), first try, fix in the reference's files, cost
-    and time, per bug size.
+    """The core loop on the planted logic bugs: the agent writes the repro
+    (red rate, valid against the reference fix), then fixes; resolved = the
+    hidden planted repro and every check green. Also first try, fix in the
+    reference's files, cost and time, per bug size. `--planted` hands the
+    planted repro to the agent instead (the step 6 baseline).
 
-    Paid: the implementer's runs only. Each bug starts from the spec
+    Paid: the reproducer's and implementer's runs only. Each bug starts from the spec
     `eval refine` stored in data/refine/ (refine is measured there); a bug
     without one, or with one made at another commit, is reported and
     skipped. Every result goes to data/runs/.
@@ -1182,40 +1230,48 @@ def eval_loop(
         typer.echo(f"no [loop] in the target file of {target}", err=True)
         raise typer.Exit(code=1)
     agent = _agent().editing(budget_usd=1.0)
-    planted = [b for b in load_bugs(bugs, seed) if b.kind == "logic"]
+    logic = [b for b in load_bugs(bugs, seed) if b.kind == "logic"]
     if only is not None:
         keys = only.split(",")
-        unknown = set(keys) - {b.key for b in planted}
+        unknown = set(keys) - {b.key for b in logic}
         if unknown:
             names = ", ".join(sorted(unknown))
             typer.echo(f"unknown logic bug keys: {names}", err=True)
             raise typer.Exit(code=1)
-        planted = [b for b in planted if b.key in keys]
+        logic = [b for b in logic if b.key in keys]
     clone = settings.clones_dir / target.replace("/", "-")
     commit = refine_mod.update_clone(target, clone)
     specs = loop_eval.load_specs(settings.refine_dir)
-    ready = [b for b in planted if b.key in specs and specs[b.key].commit == commit]
-    for b in planted:
+    ready = [b for b in logic if b.key in specs and specs[b.key].commit == commit]
+    for b in logic:
         if b not in ready:
             typer.echo(f"  {b.key:<30} skipped: no stored spec at {commit[:7]}")
     typer.echo(f"{target} at {commit[:7]}: {len(ready)} logic bugs, {agent.model}")
     sandbox = Podman(image=rules.image, setup=rules.setup)
 
-    def run(bug: PlantedBug) -> run_mod.LoopResult:
+    def run(bug: PlantedBug) -> loop_eval.Judged:
         refined = specs[bug.key]
         worktree = settings.work_dir / f"eval-{bug.key}"
         try:
-            return run_mod.run_loop(
+            result = run_mod.run_loop(
                 repo=target,
                 number=refined.number,
                 commit=refined.commit,
                 spec=refined.spec,
                 clone=clone,
                 worktree=worktree,
-                repro_file=repro_path(bugs, bug),
+                repro_file=repro_path(bugs, bug) if planted else None,
                 rules=rules,
                 agent=agent,
                 sandbox=sandbox,
+            )
+            return loop_eval.against_key(
+                result,
+                worktree,
+                rules,
+                repro_path(bugs, bug),
+                fix_path(bugs, bug),
+                sandbox,
             )
         finally:
             run_mod.remove_worktree(clone, worktree)
@@ -1225,10 +1281,15 @@ def eval_loop(
     scores = [loop_eval.score_bug(b, results[b.key]) for b in ready]
     for sc in scores:
         target_mark = "on target" if sc.on_target else "elsewhere"
+        valid = {None: "-", True: "valid", False: "INVALID"}[sc.valid]
+        verdict = "resolved" if sc.resolved else sc.status
+        if sc.status == "green" and not sc.resolved:
+            verdict = "judge red"
         typer.echo(
-            f"  {sc.key:<30} {sc.size}  {sc.status:<12} {sc.attempts} tries  "
-            f"{target_mark:<9}  ${sc.cost_usd:.3f}  setup {sc.setup_s:.0f}s "
-            f"agent {sc.agent_s:.0f}s checks {sc.checks_s:.0f}s"
+            f"  {sc.key:<30} {sc.size}  repro {valid:<7} {verdict:<9} "
+            f"{sc.attempts} tries  {target_mark:<9}  ${sc.cost_usd:.3f}  "
+            f"setup {sc.setup_s:.0f}s agent {sc.agent_s:.0f}s "
+            f"checks {sc.checks_s:.0f}s"
         )
     for label, group in [
         ("all", scores),
@@ -1237,17 +1298,18 @@ def eval_loop(
         t = loop_eval.summarize(group)
         if t.n:
             typer.echo(
-                f"  {label:<7} n={t.n:<3} resolved {t.resolved:.2f}  "
-                f"first try {t.first_try:.2f}  on target {t.on_target:.2f}  "
-                f"${t.cost_usd:.3f}/bug  {t.attempts:.0f} tries and "
-                f"{t.seconds:.0f} s median"
+                f"  {label:<7} n={t.n:<3} reproduced {t.reproduced:.2f}  "
+                f"valid {t.valid:.2f}  green {t.green:.2f}  "
+                f"resolved {t.resolved:.2f}  first try {t.first_try:.2f}  "
+                f"on target {t.on_target:.2f}  ${t.cost_usd:.3f}/bug  "
+                f"{t.attempts:.0f} tries and {t.seconds:.0f} s median"
             )
     total = sum(sc.cost_usd for sc in scores)
     typer.echo(f"  total ${total:.2f}")
     out = settings.runs_dir / f"eval-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(
-        TypeAdapter(dict[str, run_mod.LoopResult]).dump_json(results, indent=2)
+        TypeAdapter(dict[str, loop_eval.Judged]).dump_json(results, indent=2)
     )
     typer.echo(f"  -> {out}")
 

@@ -5,19 +5,24 @@ from pathlib import Path
 import pytest
 
 from cofabriq.eval.bugs import PlantedBug, load_bugs, planted_for
-from cofabriq.eval.loop import load_specs, score_bug, summarize
+from cofabriq.eval.loop import Judged, against_key, load_specs, score_bug, summarize
 from cofabriq.eval.triage import load_seed
 from cofabriq.loop.engine import AgentRun, ClaudeCode
 from cofabriq.loop.run import (
+    NOT_RED,
     Attempt,
     Check,
+    CheckResult,
     Implemented,
     LoopResult,
+    Reproduced,
     Rules,
     changed_paths,
     fenced,
+    is_test,
     load_rules,
     remove_worktree,
+    repro_command,
     run_loop,
 )
 from cofabriq.loop.sandbox import Podman, Ran, run_command, tail
@@ -34,6 +39,17 @@ RULES = Rules(
     checks=[Check(name="test", cmd="! grep -rq broken src/a.ts")],
     protected=["package.json"],
 )
+
+# The agent writes the repro: test files only, and "types" (no word TYPEERR
+# in src/) has to pass before the fix.
+AGENT_RULES = RULES.model_copy(
+    update={
+        "tests": ["src/**/*.test.sh"],
+        "repro_checks": ["types"],
+        "checks": [Check(name="types", cmd="! grep -rq TYPEERR src"), *RULES.checks],
+    }
+)
+REPRO = 'grep -q fixed "$(dirname "$0")/a.ts"\n'  # as src/a.test.sh
 
 
 class HostSandbox:
@@ -57,9 +73,14 @@ class EditingAgent:
     def __init__(self, *edits: Edit) -> None:
         self.edits = list(edits)
         self.prompts: list[str] = []
+        self.roles: list[str] = []
 
     def __call__(self, prompt: str, schema: dict[str, object], cwd: Path) -> AgentRun:
-        assert schema == Implemented.model_json_schema()
+        roles = {
+            "reproduce": Reproduced.model_json_schema(),
+            "implement": Implemented.model_json_schema(),
+        }
+        self.roles.append(next(r for r, s in roles.items() if s == schema))
         self.prompts.append(prompt)
         self.edits.pop(0)(cwd)
         return AgentRun(
@@ -98,7 +119,10 @@ def setup(tmp_path: Path) -> tuple[Path, Path, str]:
 
 
 def loop(
-    tmp_path: Path, agent: EditingAgent, sandbox: HostSandbox | None = None
+    tmp_path: Path,
+    agent: EditingAgent,
+    sandbox: HostSandbox | None = None,
+    planted: bool = True,
 ) -> tuple[LoopResult, Path, Path]:
     clone, repro, commit = setup(tmp_path)
     worktree = tmp_path / "work" / "w"
@@ -106,11 +130,11 @@ def loop(
         repo="o/r",
         number=1,
         commit=commit,
-        spec=spec("src/a.ts"),
+        spec=spec("src/a.ts", tests=("src/a.test.sh",)),
         clone=clone,
         worktree=worktree,
-        repro_file=repro,
-        rules=RULES,
+        repro_file=repro if planted else None,
+        rules=RULES if planted else AGENT_RULES,
         agent=agent,
         sandbox=sandbox or HostSandbox(),
     )
@@ -275,6 +299,9 @@ def _result(status: str, tries: int, changed: list[str]) -> LoopResult:
         commit="c",
         status=status,  # type: ignore[arg-type]
         setup_s=10,
+        repro=["src/a.test.sh"],
+        planted=False,
+        reproduce=[],
         red=None,
         attempts=attempts,
         changed=changed,
@@ -286,14 +313,29 @@ def test_eval_scores_resolved_first_try_and_target() -> None:
     bug = PlantedBug(
         key="b", kind="logic", size="S", files=["src/a.ts"], repro="b.test.ts"
     )
-    first = score_bug(bug, _result("green", 1, ["src/a.ts", "src/a.test.ts"]))
-    later = score_bug(bug, _result("green", 2, ["src/other.ts"]))
-    failed = score_bug(bug, _result("escalated", 3, ["src/a.ts"]))
+
+    def judged(result: LoopResult, judge: bool | None, valid: bool) -> Judged:
+        def check(ok: bool) -> CheckResult:
+            return CheckResult(name="c", ok=ok, seconds=1, output="")
+
+        return Judged(
+            result=result,
+            judge=None if judge is None else check(judge),
+            valid=check(valid),
+        )
+
+    files = ["src/a.ts", "src/a.test.ts"]
+    first = score_bug(bug, judged(_result("green", 1, files), True, True))
+    later = score_bug(bug, judged(_result("green", 2, ["src/other.ts"]), True, True))
+    failed = score_bug(bug, judged(_result("escalated", 3, ["src/a.ts"]), None, False))
+    fooled = score_bug(bug, judged(_result("green", 1, ["src/a.ts"]), False, False))
     assert first.on_target and not later.on_target
     assert first.agent_s == 2 and later.cost_usd == 0.1
-    t = summarize([first, later, failed])
-    assert (t.n, t.resolved, t.first_try, t.on_target) == (3, 2 / 3, 1 / 3, 0.5)
-    assert t.attempts == 2
+    assert fooled.status == "green" and not fooled.resolved
+    t = summarize([first, later, failed, fooled])
+    assert (t.n, t.green, t.resolved, t.first_try) == (4, 0.75, 0.5, 0.25)
+    assert (t.on_target, t.valid) == (0.5, 0.5)
+    assert t.attempts == 1.5
     assert summarize([]).n == 0
 
 
@@ -326,3 +368,81 @@ def test_git_ignores_the_callers_git_environment(
     monkeypatch.setenv("GIT_INDEX_FILE", ".git/index")
     result, _, _ = loop(tmp_path, EditingAgent(write("src/a.ts", "fixed\n")))
     assert result.status == "green"
+
+
+def test_agent_writes_the_repro_then_fixes_against_it(tmp_path: Path) -> None:
+    agent = EditingAgent(
+        # reproducer: a test, plus a fix it must not make (reverted)
+        both(write("src/a.test.sh", REPRO), write("src/a.ts", "fixed\n")),
+        # implementer: the fix, plus an attempt to weaken the test (reverted)
+        both(write("src/a.ts", "fixed\n"), write("src/a.test.sh", "true\n")),
+    )
+    result, worktree, _ = loop(tmp_path, agent, planted=False)
+    assert agent.roles == ["reproduce", "implement"]
+    assert result.status == "green" and not result.planted
+    assert result.repro == ["src/a.test.sh"]
+    assert result.reproduce[0].reverted == ["src/a.ts"]
+    assert result.red is not None and not result.red.ok
+    assert result.attempts[0].reverted == ["src/a.test.sh"]
+    assert (worktree / "src/a.test.sh").read_text() == REPRO
+    # the agent's test ships with the fix
+    assert result.changed == ["src/a.test.sh", "src/a.ts"]
+    assert "+grep -q fixed" in result.diff
+    assert "tests:\n- src/a.test.sh" in agent.prompts[0]  # the spec's test idea
+    assert "tests:" not in agent.prompts[1] and "src/a.test.sh" in agent.prompts[1]
+    assert result.cost_usd == 0.2
+
+
+def test_repro_that_passes_or_breaks_types_is_sent_back(tmp_path: Path) -> None:
+    agent = EditingAgent(
+        write("src/a.test.sh", "true\n"),  # green: no repro
+        write("src/a.test.sh", "TYPEERR\nfalse\n"),  # red, but types fail
+        write("src/a.test.sh", REPRO),
+        write("src/a.ts", "fixed\n"),
+    )
+    result, _, _ = loop(tmp_path, agent, planted=False)
+    first, second, third = result.reproduce
+    assert [c.ok for c in first.checks] == [False, True]
+    assert [c.ok for c in second.checks] == [True, False]
+    assert NOT_RED in agent.prompts[1] and '<failed check="types">' in agent.prompts[2]
+    assert third.green and result.status == "green"
+
+
+def test_no_repro_after_three_tries(tmp_path: Path) -> None:
+    agent = EditingAgent(*[write("src/a.ts", "fixed\n")] * 3)
+    result, _, _ = loop(tmp_path, agent, planted=False)
+    assert result.status == "no_repro" and result.attempts == []
+    assert result.red is None and len(result.reproduce) == 3
+    assert "No test file written" in result.reproduce[0].checks[0].output
+    assert result.changed == []  # the fixes it tried were reverted
+
+
+def test_judge_and_validity_against_the_answer_key(tmp_path: Path) -> None:
+    patch = tmp_path / "fix.patch"
+    patch.write_text("--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-bug\n+fixed\n")
+    sandbox = HostSandbox()
+
+    def judged(name: str, *edits: Edit) -> Judged:
+        agent = EditingAgent(*edits)
+        result, worktree, _ = loop(tmp_path / name, agent, sandbox, planted=False)
+        planted = tmp_path / name / "bug.test.sh"  # from setup()
+        return against_key(result, worktree, AGENT_RULES, planted, patch, sandbox)
+
+    good = judged("good", write("src/a.test.sh", REPRO), write("src/a.ts", "fixed\n"))
+    assert good.judge is not None and good.judge.ok
+    assert good.valid is not None and good.valid.ok
+    # a test of something else: red now, still red with the reference fix;
+    # the fix that turns it green leaves the planted repro red
+    other = 'grep -q other "$(dirname "$0")/a.ts"\n'
+    wrong = judged("wrong", write("src/a.test.sh", other), write("src/a.ts", "other\n"))
+    assert wrong.result.status == "green"
+    assert wrong.judge is not None and not wrong.judge.ok
+    assert wrong.valid is not None and not wrong.valid.ok
+
+
+def test_test_globs_and_quoted_repro_paths() -> None:
+    globs = ["src/**/*.test.ts"]
+    assert is_test("src/a.test.ts", globs) and is_test("src/x/y/a.test.ts", globs)
+    assert not is_test("src/a.ts", globs) and not is_test("e2e/a.test.ts", globs)
+    cmd = repro_command(RULES, ["src/a b.test.ts", "src/x;rm.test.ts"])
+    assert cmd == "sh 'src/a b.test.ts' 'src/x;rm.test.ts'"

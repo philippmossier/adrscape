@@ -9,9 +9,9 @@ carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
 Roadmap: 0.1 triage (read-only) -> 0.2 the core loop on the playground
 (refine, plan gate, reproduce, implement, checks, reviewer, risk tiers, draft
-PR) -> later: lookback, more targets. Current: v0.1.3; 0.2 steps 1-6 (repo
-map, impact eval, planted bugs, refine, the loop) done, step 7 (reviewer,
-draft PR) next.
+PR) -> later: lookback, more targets. Current: v0.1.3; 0.2 steps 1-7 (repo
+map, impact eval, planted bugs, refine, the loop, agent-written repro) done,
+step 8 (reviewer, draft PR) next.
 
 ## Commands
 
@@ -33,8 +33,8 @@ draft PR) next.
 - `uv run cofabriq eval impact-set [--test]` / `eval impact [--test]`: freeze the impact set (vscode issues closed by a PR or commit; truth = components touched by their "fixes #N" commits in the clone) and score popularity vs kNN over earlier fixed issues vs kNN + co-change, hit@k / recall@k; needs `map build --until` at `[impact] map_until`; free
 - `uv run cofabriq refine <n> [--repo] [--json]`: spec for one issue (problem, files, tests, plan, assumptions, open questions, size) from a read-only Claude Code run (`claude -p --bare --restricted`, Read/Grep/Glob) on a full clone in `data/clones/` (cloned, or fetched and checked out detached at the default branch); paths checked against the commit; needs `ANTHROPIC_API_KEY` and `claude` on PATH; paid
 - `uv run cofabriq eval refine [--only key,key]`: refine on the planted bugs (`playground/bugs.toml`), files hit@k / recall@k / precision and the size guess, per bug size; paid (about $0.17 per bug), results in `data/refine/`
-- `uv run cofabriq run <n> [--spec file] [--yes] [--keep]`: the core loop for one planted logic bug: refine (or a stored spec), the plan gate, a worktree in `data/work/`, the repro red, Claude Code with Edit/Write (no shell) fixes it, repro and the target's checks (`[loop]` in the target file) run in podman without network, max 3 attempts; result in `data/runs/`; needs podman and `ANTHROPIC_API_KEY`; paid
-- `uv run cofabriq eval loop [--only key,key]`: the loop on the planted logic bugs from the specs `eval refine` stored, resolved / first try / fix in the reference's files, cost and time per bug size; paid (about $0.05 per bug)
+- `uv run cofabriq run <n> [--spec file] [--yes] [--keep] [--planted]`: the core loop for one issue: refine (or a stored spec), the plan gate, a worktree in `data/work/`, Claude Code with Edit/Write (no shell) writes a failing test (test files only, `[loop] tests`; red, and `repro_checks` green), then fixes the code against it, repro and the target's checks (`[loop]` in the target file) run in podman without network, max 3 attempts per step; on a planted logic bug the hidden planted repro judges the fix (`--planted` hands it to the agent instead); result in `data/runs/`; needs podman and `ANTHROPIC_API_KEY`; paid
+- `uv run cofabriq eval loop [--only key,key] [--planted]`: the loop on the planted logic bugs from the specs `eval refine` stored: reproduced, repro valid (green with the reference patch), resolved (the hidden planted repro green), first try, fix in the reference's files, cost and time per bug size; `--planted` is the given-repro baseline; paid (about $0.10 per bug, $0.05 with `--planted`)
 - `uv run cofabriq mcp`: serve `search`, `decisions`, `affected` and `triage` (optional `repo`, default `TARGET_REPO`) as MCP tools over stdio (registered for Claude Code in `.mcp.json`)
 
 ## Layout
@@ -51,7 +51,7 @@ draft PR) next.
 - `playground/`: seed issues with expected labels (`seed.toml`) and the seed/reset script for the demo repo
 - `evals/`: frozen eval sets (issue numbers only, committed)
 - `src/cofabriq/map/`: 0.2 repo map: `components.py` (path -> component rules), `history.py` (commits and files of a clone as of a date), `build.py` (co-change counts), `store.py` (Neo4j, `Component`/`File` keyed by repo), `fixes.py` (issue -> fix commits from commit messages)
-- `src/cofabriq/loop/`: 0.2 core loop: `engine.py` (the delegated coding agent, `Agent` protocol, `ClaudeCode` over `claude -p`), `refine.py` (issue -> typed spec, path checks, the clone), `sandbox.py` (the target's commands in podman, network only for install), `run.py` (worktree, repro, fix attempts, write boundary)
+- `src/cofabriq/loop/`: 0.2 core loop: `engine.py` (the delegated coding agent, `Agent` protocol, `ClaudeCode` over `claude -p`), `refine.py` (issue -> typed spec, path checks, the clone), `sandbox.py` (the target's commands in podman, network only for install), `run.py` (worktree, the reproducer, fix attempts, write boundaries)
 - `src/cofabriq/mcp_server.py`: MCP tools
 - `docs/adr/`: architecture decision records, written when the decision is made
 

@@ -32,6 +32,9 @@ setup = "corepack enable"
 install = "pnpm install --frozen-lockfile"
 repro_dir = "src/repro"
 repro = "pnpm exec vitest run"
+# the reproducer writes only these; its test must pass types and lint
+tests = ["src/**/*.test.ts"]
+repro_checks = ["types", "lint"]
 protected = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "vitest.config.ts", "eslint.config.js", "playwright.config.ts"]
 checks = [
   { name = "types", cmd = "pnpm check-types" },
