@@ -1,0 +1,1964 @@
+{
+  "repo": "microsoft/vscode",
+  "frozen_at": "2026-10-15T23:20:59.050994Z",
+  "rules": {
+    "map_until": "2022-12-31",
+    "window": [
+      "2023-01-01",
+      "2023-12-31"
+    ],
+    "test_window": [
+      "2024-01-01",
+      "2024-12-31"
+    ],
+    "sample": 300
+  },
+  "window": [
+    "2024-01-01",
+    "2024-12-31"
+  ],
+  "cases": [
+    {
+      "issue": 201683,
+      "components": [
+        "src/vs/platform/native",
+        "src/vs/workbench/electron-sandbox"
+      ]
+    },
+    {
+      "issue": 201689,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 201696,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 201700,
+      "components": [
+        "src/vs/editor/common",
+        "src/vs/workbench/browser",
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 201713,
+      "components": [
+        "src/vs/editor/common",
+        "src/vs/editor/test"
+      ]
+    },
+    {
+      "issue": 202147,
+      "components": [
+        "src/vs/editor/common",
+        "src/vs/editor/test"
+      ]
+    },
+    {
+      "issue": 202164,
+      "components": [
+        "src/vs/workbench/contrib/codeEditor",
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 202181,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 202232,
+      "components": [
+        "src/vs/editor/common",
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 202268,
+      "components": [
+        "build"
+      ]
+    },
+    {
+      "issue": 202359,
+      "components": [
+        "src/vs/workbench/services/remote"
+      ]
+    },
+    {
+      "issue": 202800,
+      "components": [
+        "src/vs/base/browser"
+      ]
+    },
+    {
+      "issue": 202838,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 203038,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 203156,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 203166,
+      "components": [
+        "src/vs/code"
+      ]
+    },
+    {
+      "issue": 203186,
+      "components": [
+        "src/vs/workbench/contrib/multiDiffEditor"
+      ]
+    },
+    {
+      "issue": 203208,
+      "components": [
+        "src/vs/workbench/contrib/chat",
+        "src/vs/workbench/contrib/extensions",
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 203211,
+      "components": [
+        "src/vs/platform/audioCues",
+        "src/vs/workbench/contrib/audioCues"
+      ]
+    },
+    {
+      "issue": 203223,
+      "components": [
+        "src/vs/workbench/contrib/files"
+      ]
+    },
+    {
+      "issue": 203389,
+      "components": [
+        "src/vs/workbench/contrib/search"
+      ]
+    },
+    {
+      "issue": 203429,
+      "components": [
+        "extensions/vscode-api-tests"
+      ]
+    },
+    {
+      "issue": 203437,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 203496,
+      "components": [
+        "src/vs/base/common",
+        "src/vs/base/test",
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 203794,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 203930,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 203969,
+      "components": [
+        "src/vs/workbench/contrib/scm"
+      ]
+    },
+    {
+      "issue": 203981,
+      "components": [
+        "src/vs/editor/contrib/find"
+      ]
+    },
+    {
+      "issue": 204020,
+      "components": [
+        "src/vs/workbench/contrib/notebook"
+      ]
+    },
+    {
+      "issue": 204302,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 204334,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 204359,
+      "components": [
+        "src/vs/workbench/services/history"
+      ]
+    },
+    {
+      "issue": 204573,
+      "components": [
+        "src/vs/workbench/services/extensionManagement"
+      ]
+    },
+    {
+      "issue": 204699,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 204771,
+      "components": [
+        "test"
+      ]
+    },
+    {
+      "issue": 204772,
+      "components": [
+        "src/vs/base/test"
+      ]
+    },
+    {
+      "issue": 204818,
+      "components": [
+        "src/vs/base/browser",
+        "src/vs/platform/quickinput"
+      ]
+    },
+    {
+      "issue": 204886,
+      "components": [
+        "src/vs/workbench/services/dialogs"
+      ]
+    },
+    {
+      "issue": 205170,
+      "components": [
+        "src/vs/workbench/contrib/output"
+      ]
+    },
+    {
+      "issue": 205291,
+      "components": [
+        "src/vs/workbench/contrib/notebook"
+      ]
+    },
+    {
+      "issue": 205314,
+      "components": [
+        "src/vs/workbench/contrib/remote"
+      ]
+    },
+    {
+      "issue": 205441,
+      "components": [
+        "build",
+        "src/vs/base/browser",
+        "src/vs/base/common",
+        "src/vs/platform/theme",
+        "src/vs/workbench/browser",
+        "src/vs/workbench/common",
+        "src/vs/workbench/contrib/chat",
+        "src/vs/workbench/contrib/comments",
+        "src/vs/workbench/contrib/debug",
+        "src/vs/workbench/contrib/files",
+        "src/vs/workbench/contrib/markers",
+        "src/vs/workbench/contrib/outline",
+        "src/vs/workbench/contrib/search",
+        "src/vs/workbench/contrib/timeline"
+      ]
+    },
+    {
+      "issue": 205453,
+      "components": [
+        "src/vs/workbench/contrib/workspace"
+      ]
+    },
+    {
+      "issue": 205598,
+      "components": [
+        "src/vs/editor/common",
+        "src/vs/editor/test"
+      ]
+    },
+    {
+      "issue": 205611,
+      "components": [
+        "src/vs/editor/contrib/gotoSymbol"
+      ]
+    },
+    {
+      "issue": 205658,
+      "components": [
+        "src/vs/base/browser"
+      ]
+    },
+    {
+      "issue": 205670,
+      "components": [
+        "src/vs/workbench/contrib/codeEditor"
+      ]
+    },
+    {
+      "issue": 205818,
+      "components": [
+        "src/vs/workbench/contrib/notebook"
+      ]
+    },
+    {
+      "issue": 206035,
+      "components": [
+        "src/vs/base/parts"
+      ]
+    },
+    {
+      "issue": 206039,
+      "components": [
+        "src/vs/platform/quickinput"
+      ]
+    },
+    {
+      "issue": 206108,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 206109,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 206126,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 206172,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 206321,
+      "components": [
+        "src/vs/workbench/contrib/accessibility",
+        "src/vs/workbench/contrib/speech"
+      ]
+    },
+    {
+      "issue": 206342,
+      "components": [
+        "(root)",
+        "remote",
+        "src/vs/platform/terminal",
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/services/extensions"
+      ]
+    },
+    {
+      "issue": 206345,
+      "components": [
+        "src/vs/workbench/browser",
+        "src/vs/workbench/services/lifecycle"
+      ]
+    },
+    {
+      "issue": 206585,
+      "components": [
+        "src/vs/base/browser"
+      ]
+    },
+    {
+      "issue": 206607,
+      "components": [
+        "src/vs/platform/terminal",
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 206762,
+      "components": [
+        "src/vs/platform/hover"
+      ]
+    },
+    {
+      "issue": 206939,
+      "components": [
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 207167,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 207177,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 207270,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 207417,
+      "components": [
+        "src/vs/workbench/services/lifecycle"
+      ]
+    },
+    {
+      "issue": 207421,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 207431,
+      "components": [
+        "src/vs/workbench/services/language"
+      ]
+    },
+    {
+      "issue": 207444,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 207454,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 207459,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 207466,
+      "components": [
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 207496,
+      "components": [
+        "src/vs/platform/quickinput"
+      ]
+    },
+    {
+      "issue": 207618,
+      "components": [
+        "src/vs/platform/update",
+        "src/vs/workbench/contrib/extensions",
+        "src/vs/workbench/contrib/update"
+      ]
+    },
+    {
+      "issue": 207698,
+      "components": [
+        "src/vs/platform/extensionManagement"
+      ]
+    },
+    {
+      "issue": 207739,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 207801,
+      "components": [
+        "src/vs/workbench/contrib/tasks"
+      ]
+    },
+    {
+      "issue": 207946,
+      "components": [
+        "src/vs/workbench/contrib/accessibilitySignals"
+      ]
+    },
+    {
+      "issue": 208102,
+      "components": [
+        "(root)",
+        "remote"
+      ]
+    },
+    {
+      "issue": 208123,
+      "components": [
+        "src/vs/workbench/contrib/scrollLocking"
+      ]
+    },
+    {
+      "issue": 208187,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 208213,
+      "components": [
+        "src/vs/platform/quickinput"
+      ]
+    },
+    {
+      "issue": 208220,
+      "components": [
+        "src/vs/base/common",
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 208221,
+      "components": [
+        "src/vs/platform/actions",
+        "src/vs/platform/quickinput",
+        "src/vs/workbench/contrib/chat",
+        "src/vs/workbench/contrib/quickaccess",
+        "src/vs/workbench/contrib/scm",
+        "src/vs/workbench/contrib/testing",
+        "src/vs/workbench/services/preferences"
+      ]
+    },
+    {
+      "issue": 208262,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 208263,
+      "components": [
+        "src/vs/workbench/contrib/webview"
+      ]
+    },
+    {
+      "issue": 208265,
+      "components": [
+        "src/vs/platform/opener",
+        "src/vs/workbench/contrib/languageStatus"
+      ]
+    },
+    {
+      "issue": 208307,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 208377,
+      "components": [
+        "src/vs/workbench/contrib/chat",
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 208420,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 208449,
+      "components": [
+        "src/vs/base/common",
+        "src/vs/editor/contrib/inlineCompletions"
+      ]
+    },
+    {
+      "issue": 208572,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 208581,
+      "components": [
+        "(root)",
+        ".vscode"
+      ]
+    },
+    {
+      "issue": 208641,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 208663,
+      "components": [
+        "src",
+        "src/vs/workbench/api",
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 208706,
+      "components": [
+        "src/vs/base/common",
+        "src/vs/workbench/contrib/chat",
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 208819,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 208844,
+      "components": [
+        "src/vs/editor/browser",
+        "src/vs/editor/common",
+        "src/vs/editor/contrib/contextmenu",
+        "src/vs/editor/test",
+        "src/vs/workbench/contrib/comments"
+      ]
+    },
+    {
+      "issue": 208879,
+      "components": [
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 208882,
+      "components": [
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 208895,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 208927,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 209642,
+      "components": [
+        "src/vs/editor/browser",
+        "src/vs/workbench/api",
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 209892,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 209937,
+      "components": [
+        "extensions/debug-server-ready",
+        "src/vs/base/common",
+        "src/vs/base/test"
+      ]
+    },
+    {
+      "issue": 209953,
+      "components": [
+        ".vscode",
+        "src/vs/workbench/contrib/tasks"
+      ]
+    },
+    {
+      "issue": 210067,
+      "components": [
+        "src/vs/workbench/contrib/search"
+      ]
+    },
+    {
+      "issue": 210119,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 210236,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 210575,
+      "components": [
+        "extensions/vscode-api-tests"
+      ]
+    },
+    {
+      "issue": 210840,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 210885,
+      "components": [
+        "src/vs/editor/browser",
+        "src/vs/editor/common"
+      ]
+    },
+    {
+      "issue": 210966,
+      "components": [
+        "extensions/typescript-language-features"
+      ]
+    },
+    {
+      "issue": 211227,
+      "components": [
+        "src/vs/workbench/services/editor"
+      ]
+    },
+    {
+      "issue": 211357,
+      "components": [
+        "src/vs/workbench/contrib/scm",
+        "src/vs/workbench/services/editor"
+      ]
+    },
+    {
+      "issue": 211374,
+      "components": [
+        "src/vs/workbench/services/textfile",
+        "src/vs/workbench/services/workingCopy"
+      ]
+    },
+    {
+      "issue": 211570,
+      "components": [
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 211626,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 211926,
+      "components": [
+        "(root)"
+      ]
+    },
+    {
+      "issue": 211988,
+      "components": [
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 212079,
+      "components": [
+        "src/vs/workbench/contrib/markdown",
+        "src/vs/workbench/contrib/update",
+        "src/vs/workbench/services/preferences"
+      ]
+    },
+    {
+      "issue": 212369,
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "issue": 212375,
+      "components": [
+        "src/vs/workbench/contrib/preferences"
+      ]
+    },
+    {
+      "issue": 212408,
+      "components": [
+        "src/vs/workbench/services/dialogs"
+      ]
+    },
+    {
+      "issue": 212447,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 212808,
+      "components": [
+        ".vscode"
+      ]
+    },
+    {
+      "issue": 212877,
+      "components": [
+        "src/vs/workbench/contrib/multiDiffEditor"
+      ]
+    },
+    {
+      "issue": 212888,
+      "components": [
+        "build"
+      ]
+    },
+    {
+      "issue": 213145,
+      "components": [
+        "src/vs/base/browser",
+        "src/vs/platform/actions",
+        "src/vs/workbench/browser",
+        "src/vs/workbench/test"
+      ]
+    },
+    {
+      "issue": 213159,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 213216,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 213367,
+      "components": [
+        "src/vs/editor/contrib/find"
+      ]
+    },
+    {
+      "issue": 213411,
+      "components": [
+        "src/vs/workbench/contrib/accessibility"
+      ]
+    },
+    {
+      "issue": 213452,
+      "components": [
+        "src/vs/workbench/contrib/timeline"
+      ]
+    },
+    {
+      "issue": 213618,
+      "components": [
+        "src/vs/workbench/contrib/accessibility"
+      ]
+    },
+    {
+      "issue": 213665,
+      "components": [
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 213667,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 213688,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    },
+    {
+      "issue": 213694,
+      "components": [
+        "src/vs/platform/terminal",
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 213703,
+      "components": [
+        "src/vs/editor/common"
+      ]
+    },
+    {
+      "issue": 213944,
+      "components": [
+        "src/vs/workbench/contrib/remote"
+      ]
+    },
+    {
+      "issue": 214294,
+      "components": [
+        "src/vs/platform/extensionManagement",
+        "src/vs/platform/extensions",
+        "src/vs/platform/userDataSync",
+        "src/vs/workbench/contrib/extensions",
+        "src/vs/workbench/services/extensionManagement",
+        "src/vs/workbench/services/extensions"
+      ]
+    },
+    {
+      "issue": 214332,
+      "components": [
+        "src/vs/workbench/contrib/notebook"
+      ]
+    },
+    {
+      "issue": 214424,
+      "components": [
+        "src/vs/workbench/contrib/debug",
+        "src/vs/workbench/contrib/extensions",
+        "src/vs/workbench/services/extensions"
+      ]
+    },
+    {
+      "issue": 214649,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 214760,
+      "components": [
+        "extensions/javascript",
+        "extensions/typescript-basics"
+      ]
+    },
+    {
+      "issue": 214765,
+      "components": [
+        "src/vs/platform/files"
+      ]
+    },
+    {
+      "issue": 214777,
+      "components": [
+        "src/vs/workbench/contrib/multiDiffEditor"
+      ]
+    },
+    {
+      "issue": 215999,
+      "components": [
+        "extensions/markdown-basics"
+      ]
+    },
+    {
+      "issue": 216421,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 216720,
+      "components": [
+        "src/vs/workbench/api",
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 217645,
+      "components": [
+        "src/vs/workbench/api",
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 217902,
+      "components": [
+        "src/vs/workbench/contrib/userDataProfile"
+      ]
+    },
+    {
+      "issue": 217915,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 218034,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 218402,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 218804,
+      "components": [
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 219006,
+      "components": [
+        "src/vs/editor/browser",
+        "src/vs/workbench/api",
+        "src/vs/workbench/common",
+        "src/vs/workbench/contrib/bulkEdit",
+        "src/vs/workbench/contrib/multiDiffEditor"
+      ]
+    },
+    {
+      "issue": 219583,
+      "components": [
+        "src/vs/platform/shell"
+      ]
+    },
+    {
+      "issue": 219984,
+      "components": [
+        "src/vs/workbench/contrib/comments"
+      ]
+    },
+    {
+      "issue": 221351,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 221367,
+      "components": [
+        "src/vs/platform/quickinput"
+      ]
+    },
+    {
+      "issue": 221479,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 221506,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 221531,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 221575,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 221744,
+      "components": [
+        "src/vs/workbench/contrib/accessibility"
+      ]
+    },
+    {
+      "issue": 221798,
+      "components": [
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 222504,
+      "components": [
+        "build"
+      ]
+    },
+    {
+      "issue": 223063,
+      "components": [
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 223304,
+      "components": [
+        "src/vs/workbench/contrib/userDataProfile"
+      ]
+    },
+    {
+      "issue": 223314,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 223324,
+      "components": [
+        "src",
+        "src/vs/workbench/api",
+        "src/vs/workbench/services/search"
+      ]
+    },
+    {
+      "issue": 223329,
+      "components": [
+        "src/vs/workbench/contrib/accessibility"
+      ]
+    },
+    {
+      "issue": 223332,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 223349,
+      "components": [
+        "src/vs/platform/native"
+      ]
+    },
+    {
+      "issue": 223368,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 223402,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 224142,
+      "components": [
+        "src/vs/workbench/services/search"
+      ]
+    },
+    {
+      "issue": 224385,
+      "components": [
+        "build"
+      ]
+    },
+    {
+      "issue": 224437,
+      "components": [
+        "src/vs/workbench/contrib/notebook"
+      ]
+    },
+    {
+      "issue": 224469,
+      "components": [
+        "build",
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 224683,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 224688,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 224794,
+      "components": [
+        "src/vs/workbench/services/configurationResolver"
+      ]
+    },
+    {
+      "issue": 224839,
+      "components": [
+        "src/vs/editor/contrib/hover",
+        "src/vs/workbench/contrib/markers"
+      ]
+    },
+    {
+      "issue": 225042,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 225043,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 225044,
+      "components": [
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 225139,
+      "components": [
+        "src"
+      ]
+    },
+    {
+      "issue": 225355,
+      "components": [
+        "(root)",
+        "remote"
+      ]
+    },
+    {
+      "issue": 225379,
+      "components": [
+        "src/vs/workbench/services/dialogs"
+      ]
+    },
+    {
+      "issue": 225398,
+      "components": [
+        "src/vs/platform/extensionManagement"
+      ]
+    },
+    {
+      "issue": 225756,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 225784,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 226032,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 226058,
+      "components": [
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 226108,
+      "components": [
+        "extensions/typescript-language-features"
+      ]
+    },
+    {
+      "issue": 226727,
+      "components": [
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 226732,
+      "components": [
+        "src/vs/workbench/contrib/userDataProfile"
+      ]
+    },
+    {
+      "issue": 226779,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 226855,
+      "components": [
+        "src/vs/workbench/contrib/debug",
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 226859,
+      "components": [
+        "src/vs/workbench/contrib/search",
+        "src/vs/workbench/services/search"
+      ]
+    },
+    {
+      "issue": 226865,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 226966,
+      "components": [
+        "src/vs/workbench/contrib/inlineChat",
+        "src/vs/workbench/contrib/mergeEditor"
+      ]
+    },
+    {
+      "issue": 227035,
+      "components": [
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 227107,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 227109,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 227147,
+      "components": [
+        "src/vs/base/common",
+        "src/vs/base/test"
+      ]
+    },
+    {
+      "issue": 227165,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 227358,
+      "components": [
+        "src/vs/workbench/services/userDataProfile"
+      ]
+    },
+    {
+      "issue": 227372,
+      "components": [
+        "src"
+      ]
+    },
+    {
+      "issue": 227432,
+      "components": [
+        "test"
+      ]
+    },
+    {
+      "issue": 227540,
+      "components": [
+        "build"
+      ]
+    },
+    {
+      "issue": 227603,
+      "components": [
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 227979,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 228030,
+      "components": [
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 228034,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 228432,
+      "components": [
+        "src/vs/base/browser",
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 228467,
+      "components": [
+        "src/vs/workbench/services/host"
+      ]
+    },
+    {
+      "issue": 228498,
+      "components": [
+        "src/vs/editor/common",
+        "src/vs/editor/test"
+      ]
+    },
+    {
+      "issue": 228598,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 228915,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 228971,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 228976,
+      "components": [
+        "src/vs/workbench/contrib/comments"
+      ]
+    },
+    {
+      "issue": 229128,
+      "components": [
+        "src/vs/workbench/services/themes"
+      ]
+    },
+    {
+      "issue": 229251,
+      "components": [
+        "src/vs/workbench/contrib/search"
+      ]
+    },
+    {
+      "issue": 229441,
+      "components": [
+        "src/vs/workbench/contrib/notebook"
+      ]
+    },
+    {
+      "issue": 229456,
+      "components": [
+        "extensions/microsoft-authentication"
+      ]
+    },
+    {
+      "issue": 229488,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 229494,
+      "components": [
+        "src/vs/workbench/contrib/update"
+      ]
+    },
+    {
+      "issue": 229553,
+      "components": [
+        "extensions/vscode-colorize-tests",
+        "src/vs/editor/common",
+        "src/vs/workbench/contrib/themes",
+        "src/vs/workbench/services/themes",
+        "src/vs/workbench/services/treeSitter"
+      ]
+    },
+    {
+      "issue": 229557,
+      "components": [
+        "extensions/vscode-colorize-tests",
+        "src/vs/editor/common",
+        "src/vs/workbench/contrib/themes",
+        "src/vs/workbench/services/themes",
+        "src/vs/workbench/services/treeSitter"
+      ]
+    },
+    {
+      "issue": 229565,
+      "components": [
+        "extensions/media-preview"
+      ]
+    },
+    {
+      "issue": 229682,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 229690,
+      "components": [
+        "src/vs/workbench/contrib/themes",
+        "src/vs/workbench/services/themes",
+        "src/vs/workbench/services/treeSitter"
+      ]
+    },
+    {
+      "issue": 229740,
+      "components": [
+        "src/vs/workbench/contrib/comments"
+      ]
+    },
+    {
+      "issue": 229752,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 229827,
+      "components": [
+        "src/vs/workbench/contrib/accessibility"
+      ]
+    },
+    {
+      "issue": 229842,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 229854,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 229878,
+      "components": [
+        "src/vs/workbench/contrib/search"
+      ]
+    },
+    {
+      "issue": 229883,
+      "components": [
+        "src/vs/workbench/contrib/notebook"
+      ]
+    },
+    {
+      "issue": 229944,
+      "components": [
+        "src/vs/workbench/contrib/performance"
+      ]
+    },
+    {
+      "issue": 229955,
+      "components": [
+        "src/vs/platform/configuration",
+        "src/vs/workbench/api",
+        "src/vs/workbench/services/configuration",
+        "src/vs/workbench/services/extensions"
+      ]
+    },
+    {
+      "issue": 230162,
+      "components": [
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 230289,
+      "components": [
+        "src/vs/workbench/contrib/extensions",
+        "src/vs/workbench/services/extensionManagement"
+      ]
+    },
+    {
+      "issue": 230361,
+      "components": [
+        "src/vs/base/browser"
+      ]
+    },
+    {
+      "issue": 230505,
+      "components": [
+        "src/vs/base/common"
+      ]
+    },
+    {
+      "issue": 230844,
+      "components": [
+        "extensions/vscode-api-tests",
+        "src",
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 230945,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 231021,
+      "components": [
+        "build"
+      ]
+    },
+    {
+      "issue": 231038,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 231065,
+      "components": [
+        "src/vs/platform/quickinput"
+      ]
+    },
+    {
+      "issue": 231377,
+      "components": [
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 231674,
+      "components": [
+        "src/vs/workbench/contrib/comments"
+      ]
+    },
+    {
+      "issue": 231858,
+      "components": [
+        "src",
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 232028,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 232143,
+      "components": [
+        "src",
+        "src/vs/workbench/api",
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 232275,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 232658,
+      "components": [
+        "src/vs/platform/terminal",
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 232757,
+      "components": [
+        "src",
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 232833,
+      "components": [
+        "src/vs/base/browser"
+      ]
+    },
+    {
+      "issue": 232864,
+      "components": [
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 233003,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 233088,
+      "components": [
+        "src/vs/workbench/contrib/terminal",
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 233226,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 233231,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 233266,
+      "components": [
+        "src/vs/base/common",
+        "src/vs/base/test",
+        "src/vs/editor/common",
+        "src/vs/workbench/browser",
+        "src/vs/workbench/contrib/localHistory",
+        "src/vs/workbench/contrib/scm"
+      ]
+    },
+    {
+      "issue": 233272,
+      "components": [
+        "src/vs/platform/extensionManagement"
+      ]
+    },
+    {
+      "issue": 233311,
+      "components": [
+        "src/vs/platform/actions"
+      ]
+    },
+    {
+      "issue": 233313,
+      "components": [
+        "src/vs/platform/actions"
+      ]
+    },
+    {
+      "issue": 233324,
+      "components": [
+        "src/vs/workbench/api",
+        "src/vs/workbench/contrib/authentication",
+        "src/vs/workbench/services/authentication"
+      ]
+    },
+    {
+      "issue": 233379,
+      "components": [
+        "src/vs/workbench/contrib/languageStatus"
+      ]
+    },
+    {
+      "issue": 233427,
+      "components": [
+        "src/vs/workbench/contrib/terminal"
+      ]
+    },
+    {
+      "issue": 233584,
+      "components": [
+        "src/vs/workbench/contrib/remote"
+      ]
+    },
+    {
+      "issue": 233610,
+      "components": [
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 233819,
+      "components": [
+        "src/vs/editor/contrib/hover",
+        "src/vs/workbench/contrib/debug"
+      ]
+    },
+    {
+      "issue": 234068,
+      "components": [
+        "src/vs/workbench/contrib/chat"
+      ]
+    },
+    {
+      "issue": 234100,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 234117,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 234213,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 234232,
+      "components": [
+        "src/vs/platform/windows"
+      ]
+    },
+    {
+      "issue": 234287,
+      "components": [
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 234464,
+      "components": [
+        "extensions/make",
+        "src",
+        "src/vs/editor/common",
+        "src/vs/editor/contrib/comment",
+        "src/vs/workbench/contrib/codeEditor"
+      ]
+    },
+    {
+      "issue": 234536,
+      "components": [
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 234547,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 234614,
+      "components": [
+        "src/vs/editor/browser"
+      ]
+    },
+    {
+      "issue": 234672,
+      "components": [
+        "src/vs/workbench/api"
+      ]
+    },
+    {
+      "issue": 235043,
+      "components": [
+        "src/vs/workbench/contrib/chat",
+        "src/vs/workbench/contrib/inlineChat"
+      ]
+    },
+    {
+      "issue": 235091,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib",
+        "src/vs/workbench/services/suggest"
+      ]
+    },
+    {
+      "issue": 235101,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 235127,
+      "components": [
+        "src/vs/workbench/contrib/extensions"
+      ]
+    },
+    {
+      "issue": 235343,
+      "components": [
+        "src/vs/workbench/contrib/testing"
+      ]
+    },
+    {
+      "issue": 235371,
+      "components": [
+        "src/vs/platform/configuration",
+        "src/vs/workbench/common",
+        "src/vs/workbench/contrib/preferences",
+        "src/vs/workbench/contrib/workspace",
+        "src/vs/workbench/services/configuration",
+        "src/vs/workbench/services/userDataProfile"
+      ]
+    },
+    {
+      "issue": 235763,
+      "components": [
+        "src/vs/platform/extensionManagement"
+      ]
+    },
+    {
+      "issue": 235821,
+      "components": [
+        "src/vs/workbench/contrib/comments"
+      ]
+    },
+    {
+      "issue": 235895,
+      "components": [
+        "src/vs/workbench/contrib/update"
+      ]
+    },
+    {
+      "issue": 236195,
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "issue": 236474,
+      "components": [
+        "src/vs/workbench/contrib/terminalContrib"
+      ]
+    },
+    {
+      "issue": 236698,
+      "components": [
+        "src/vs/workbench/browser"
+      ]
+    }
+  ]
+}

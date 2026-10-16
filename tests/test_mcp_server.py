@@ -5,6 +5,7 @@ from mcp import Client
 from neo4j import Driver
 
 from cofabriq.context.store import postgres
+from cofabriq.map.impact import Impact, Touch
 from cofabriq.mcp_server import build
 from tests.test_embed_store import FakeEmbedder, chunk
 from tests.test_graph import adr, link, sync
@@ -65,3 +66,30 @@ def test_affected_is_empty_for_an_unknown_id(
     conn: postgres.Conn, driver: Driver
 ) -> None:
     assert call(conn, driver, "affected", {"adr": "nope:x.md"}) == []
+
+
+def test_impact_tool_passes_number_or_plan(conn: postgres.Conn, driver: Driver) -> None:
+    calls: list[tuple[str, int | None, str | None, int]] = []
+
+    def impact_fn(repo: str, number: int | None, plan: str | None, k: int) -> Impact:
+        calls.append((repo, number, plan, k))
+        touch = Touch(component="src/a", score=0.9, via=[3])
+        return Impact(
+            repo=repo, map_rev="abc", components=[touch], blast=[], neighbours=[]
+        )
+
+    async def run(args: dict[str, Any]) -> Any:
+        server = build(
+            FakeEmbedder(), conn, driver, default_repo="acme/app", impact_fn=impact_fn
+        )
+        async with Client(server) as client:
+            return await client.call_tool("impact", args)
+
+    ok = asyncio.run(run({"plan": "pin terminal tabs", "k": 99}))
+    both = asyncio.run(run({"number": 1, "plan": "x"}))
+
+    assert not ok.is_error
+    assert ok.structured_content is not None
+    assert ok.structured_content["components"][0]["via"] == [3]
+    assert calls == [("acme/app", None, "pin terminal tabs", 20)]  # k capped
+    assert both.is_error

@@ -306,14 +306,20 @@ Development: `make check` runs ruff, pyright (strict) and pytest.
 - [x] **0.1.3:** readiness route (`ready`, `needs_info`, `dev`) with
       verified required info, a blocking judgement and a reply draft;
       missing-info eval on vscode's `info-needed` label, held-out split
-- [ ] **0.2: repo map + planning mode (read-only).** Components, files,
-      co-change, PRs, issues and decisions in Neo4j; `impact` of an issue or
-      a plan. Number: predicted vs actually touched components
-- [ ] **0.3: autopilot.** Refinement, size and blast-radius gate, delegated
-      implementation, the target's CI as the gate, fix loop with escalation,
-      draft PR
-- [ ] **0.4: review.** Reviewer with its own context, blast-radius routing
-      (human review vs auto-merge eligible), run metrics
+- [ ] **0.2: the core loop, on a playground with planted bugs.** Refine
+      (an agent reads the code and writes a spec; the dev approves it before
+      any code exists), reproduce (a failing test first, or it goes back to
+      a human), implement in a worktree, the target's own checks, a capped
+      fix loop, a reviewer with its own context, risk tiers on the diff, a
+      draft PR the dev merges. Numbers: resolve rate, cost and human minutes
+      per merged PR.
+      Done so far: a repo map from git history (components, co-change,
+      fixes) and `impact`: from the issue text alone, a component the fix
+      touched is in the top 5 for 75% of vscode issues on a held-out year
+      (popularity baseline 22%), no LLM call. Kept as an MCP tool, not as
+      the way the factory finds code: the agent reads the code
+- [ ] **Later:** lookback (recurring fixes mark brittle areas), visual plan
+      review, learning from run traces, more target repos
 
 Milestones are 0.x releases, tagged in git: the API and the CLI may still
 change. 1.0 comes when someone besides me relies on it.

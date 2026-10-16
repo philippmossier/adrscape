@@ -28,20 +28,29 @@ from cofabriq.context.ingest.source import LocalGitSource, Source
 from cofabriq.context.store import graph as kg
 from cofabriq.context.store import postgres
 from cofabriq.eval import dedupe
+from cofabriq.eval import impact as impact_eval
 from cofabriq.eval import readiness as readiness_eval
 from cofabriq.eval import triage as triage_eval
 from cofabriq.issues import triage as triage_mod
 from cofabriq.issues import vectors
 from cofabriq.issues import verdict as verdict_mod
-from cofabriq.issues.fetch import fetch_created, fetch_issues, load_issues
+from cofabriq.issues.fetch import fetch_created, fetch_issues, load_issue, load_issues
 from cofabriq.issues.github import GitHubIssueSource
 from cofabriq.issues.model import Issue, check_repo
+from cofabriq.map import build as map_build_mod
+from cofabriq.map import components as components_mod
+from cofabriq.map import fixes as fixes_mod
+from cofabriq.map import history
+from cofabriq.map import impact as impact_mod
+from cofabriq.map import store as map_store
 from cofabriq.mcp_server import build as build_mcp
 from cofabriq.steps import Steps
 
 app = typer.Typer(no_args_is_help=True)
 eval_app = typer.Typer(no_args_is_help=True, help="Measure retrieval and verdicts.")
 app.add_typer(eval_app, name="eval")
+map_app = typer.Typer(no_args_is_help=True, help="The repo map: components, co-change.")
+app.add_typer(map_app, name="map")
 EVALS_DIR = Path("evals")
 CANDIDATE_ISSUES = 10  # vector top-k the verdict chooses from
 
@@ -349,6 +358,164 @@ def eval_readiness(repo: str | None = None, test: bool = False) -> None:
     )
 
 
+@map_app.command("build")
+def map_build(clone: Path, repo: str | None = None, until: str | None = None) -> None:
+    """Build the repo map from a local clone's history into Neo4j, replacing
+    that repo's map. `--until 2022-12-31`: the map as of that day (evals must
+    not see the fixes they predict). A clone without file contents is
+    enough: `git clone --filter=blob:none --no-checkout <url>`."""
+    target = _target_repo(repo)
+    day = date.fromisoformat(until) if until else None
+    rules = components_mod.load_rules(get_settings().targets_dir, target)
+    rev = history.rev_at(clone, day)
+    m = map_build_mod.build(
+        history.files_at(clone, rev), history.commits(clone, rev), rules
+    )
+    fixed = fixes_mod.fixes(clone, rev, target)
+    rows = map_store.fix_rows(fixed, rules, set(m.files.values()))
+    with _graph() as driver:
+        report = map_store.write(driver, target, rev, day, m, rows)
+    typer.echo(
+        f"{target} at {rev[:10]} ({until or 'head'}): {report.components} "
+        f"components, {report.files} files; {m.used} commits counted, "
+        f"{m.skipped} skipped (over {map_build_mod.MAX_FILES} files); "
+        f"{report.component_pairs} component pairs, {report.file_pairs} file "
+        f"pairs, {report.fixes} fix commits"
+    )
+
+
+@map_app.command("show")
+def map_show(
+    repo: str | None = None, component: str | None = None, k: int = 10
+) -> None:
+    """The map's components (most changed first), or one component's
+    strongest co-change partners."""
+    target = _target_repo(repo)
+    with _graph() as driver:
+        if component is None:
+            for c in map_store.components(driver, target)[:k]:
+                typer.echo(f"{c.commits:>6} commits  {c.files:>5} files  {c.name}")
+            return
+        for p in map_store.changes_with(driver, target, component, k):
+            typer.echo(f"{p.n:>6} together  {p.share:>5.0%}  {p.name}")
+
+
+def _clone(repo: str) -> Path:
+    return Path("data/clones") / repo.replace("/", "-")
+
+
+def _impact_path(repo: str, test: bool) -> Path:
+    suffix = "-test" if test else ""
+    return EVALS_DIR / f"impact-{repo.replace('/', '-')}{suffix}.json"
+
+
+@eval_app.command("impact-set")
+def impact_set(
+    repo: str | None = None, test: bool = False, force: bool = False
+) -> None:
+    """Freeze the impact eval set: issues closed by a PR or commit, and the
+    components their fix commits touched (from the clone in data/clones/).
+    `--test` freezes the held-out split."""
+    settings = get_settings()
+    target = _target_repo(repo)
+    path = _impact_path(target, test)
+    if path.exists() and not force:
+        typer.echo(f"{path} is frozen; --force to rebuild it", err=True)
+        raise typer.Exit(code=1)
+    rules = impact_eval.load_rules(settings.targets_dir, target)
+    if rules is None:
+        typer.echo("needs [impact] in the target file", err=True)
+        raise typer.Exit(code=1)
+    clone = _clone(target)
+    fixed = fixes_mod.fixes(clone, history.rev_at(clone, None), target)
+    impact, pool = impact_eval.build(
+        load_issues(settings.issues_dir, target),
+        fixed,
+        components_mod.load_rules(settings.targets_dir, target),
+        rules,
+        rules.test_window if test else rules.window,
+        frozen_at=datetime.now(UTC),
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(impact.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    typer.echo(f"{len(impact.cases)} cases of {pool} -> {path}")
+
+
+@eval_app.command("impact")
+def eval_impact(repo: str | None = None, test: bool = False) -> None:
+    """Which components will the fix touch, from the issue text alone?
+    Popularity vs kNN over earlier fixed issues vs kNN plus co-change, as
+    hit@k and recall@k. Free: embeddings and the clone, no LLM. The map is
+    built in memory at the rules' `map_until`, so the Neo4j map can stay
+    current for `impact`."""
+    settings = get_settings()
+    target = _target_repo(repo)
+    impact = impact_eval.ImpactSet.model_validate_json(
+        _impact_path(target, test).read_bytes()
+    )
+    until = impact.rules.map_until.isoformat()
+    components = components_mod.load_rules(settings.targets_dir, target)
+    clone = _clone(target)
+    cut_rev = history.rev_at(clone, impact.rules.map_until)
+    repo_map = map_build_mod.build(
+        history.files_at(clone, cut_rev), history.commits(clone, cut_rev), components
+    )
+    popular = repo_map.popular()
+    fixed = fixes_mod.fixes(clone, history.rev_at(clone, None), target)
+    issues = {i.number: i for i in load_issues(settings.issues_dir, target)}
+    cache: dict[str, list[tuple[str, float]]] = {}
+
+    def partners(component: str) -> list[tuple[str, float]]:
+        if component not in cache:
+            cache[component] = repo_map.partners(component, 10)
+        return cache[component]
+
+    methods: dict[str, dict[int, list[str]]] = {
+        "popularity": {},
+        "kNN": {},
+        "kNN + co-change": {},
+        "kNN fixed": {},
+        "kNN fixed + co-ch.": {},
+    }
+    empty = {"kNN": 0, "kNN fixed": 0}  # no neighbour had a fix: popularity only
+    first_fix = {n: min(c.at for c in commits) for n, commits in fixed.items()}
+    with postgres.connect(settings.postgres_dsn) as conn:
+        for case in impact.cases:
+            issue = issues[case.issue]
+            filed = issue.created_at
+            known = [n for n, at in first_fix.items() if at < filed]
+            for name, among in [("kNN", None), ("kNN fixed", known)]:
+                hits = vectors.nearest(
+                    conn, target, issue.number, impact_eval.NEIGHBOURS, filed, among
+                )
+                ranked = impact_eval.knn(
+                    [(h.number, h.score) for h in hits], filed, fixed, components
+                )
+                empty[name] += not ranked
+                spread = impact_mod.spread(ranked, partners)
+                with_co = "kNN + co-change" if among is None else "kNN fixed + co-ch."
+                methods[name][case.issue] = impact_eval.fill(ranked, popular)
+                methods[with_co][case.issue] = impact_eval.fill(spread, popular)
+            methods["popularity"][case.issue] = popular
+    sizes = [len(c.components) for c in impact.cases]
+    start, end = impact.window
+    typer.echo(
+        f"{target} {start}..{end}, map cut {until}: {len(impact.cases)} issues, "
+        f"{fmean(sizes):.1f} components touched on average, "
+        f"{len(popular)} in the map"
+    )
+    ks = (1, 3, 5, 10)
+    for name, predicted in methods.items():
+        s = impact_eval.score(impact.cases, predicted, ks)
+        hit = "  ".join(f"@{k} {v:.3f}" for k, v in s.hit_at.items())
+        recall = "  ".join(f"@{k} {v:.3f}" for k, v in s.recall_at.items())
+        typer.echo(f"  {name:<18} hit {hit}  |  recall {recall}")
+    typer.echo(
+        "  no evidence (popularity only): "
+        + ", ".join(f"{name} {n}/{len(impact.cases)}" for name, n in empty.items())
+    )
+
+
 @eval_app.command("triage")
 def eval_triage(
     repo: str | None = None, seed: Path = Path("playground/seed.toml")
@@ -591,6 +758,88 @@ def _render_card(out: Console, card: triage_mod.TriageCard) -> None:
     flush()
 
 
+NEIGHBOURS = 30  # earlier fixed issues voting in `impact`, as measured
+
+
+def _impact_fn(
+    conn: postgres.Conn, driver: Driver, embed: Embed
+) -> Callable[[str, int | None, str | None, int], impact_mod.Impact]:
+    """(repo, issue number or None, plan text or None, k) -> Impact. An issue
+    must be fetched and embedded; it only sees fixes committed before it was
+    filed. A plan sees everything on the map."""
+
+    def run(
+        repo: str, number: int | None, plan: str | None, k: int
+    ) -> impact_mod.Impact:
+        rev = map_store.rev(driver, repo)
+        if rev is None:
+            raise triage_mod.NotReady(f"no map for {repo}: run map build")
+        if number is not None:
+            issue = load_issue(get_settings().issues_dir, repo, number)
+            if issue is None or vectors.embedding(conn, repo, number) is None:
+                raise triage_mod.NotReady(
+                    f"{repo}#{number} is not fetched and embedded: run triage first"
+                )
+            before = issue.created_at
+            among = map_store.fixed_issues(driver, repo, before)
+            hits = vectors.nearest(conn, repo, number, NEIGHBOURS, before, among)
+        elif plan is not None:
+            before = None
+            among = map_store.fixed_issues(driver, repo, None)
+            [vector] = embed([plan[: vectors.MAX_BODY]])
+            hits = vectors.nearest_to(conn, repo, vector, NEIGHBOURS, among)
+        else:
+            raise ValueError("an issue number or a plan")
+        neighbours = [(h.number, h.score) for h in hits]
+        fixed = map_store.fixed(driver, repo, [n for n, _ in neighbours], before)
+
+        def partners(component: str) -> list[tuple[str, float]]:
+            found = map_store.changes_with(driver, repo, component, 10)
+            return [(p.name, p.share) for p in found]
+
+        return impact_mod.assemble(repo, rev, neighbours, fixed, partners, k)
+
+    return run
+
+
+@app.command()
+def impact(
+    number: int | None = typer.Argument(None),
+    plan: Path | None = None,
+    repo: str | None = None,
+    k: int = 8,
+    json: bool = False,
+) -> None:
+    """Components a fix for issue <number> (or a plan, `--plan plan.md`) will
+    likely touch: earlier similar issues vote with what their fixes touched,
+    co-change on the map adds the blast radius. Needs `map build`."""
+    if (number is None) == (plan is None):
+        typer.echo("pass an issue number or --plan, not both", err=True)
+        raise typer.Exit(code=1)
+    target = _target_repo(repo)
+    text = plan.read_text("utf-8") if plan else None
+    with _graph() as driver, postgres.connect(get_settings().postgres_dsn) as conn:
+        try:
+            result = _impact_fn(conn, driver, _embedder())(target, number, text, k)
+        except triage_mod.NotReady as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
+    if json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    subject = f"#{number}" if number is not None else str(plan)
+    typer.echo(f"{target} {subject}, map at {result.map_rev[:10]}")
+    if not result.components:
+        typer.echo("  no earlier issue with a fix on the map: no evidence to go on")
+    for t in result.components:
+        why = ", ".join(f"#{n}" for n in t.via[:4])
+        typer.echo(f"  {t.score:>6.2f}  {t.component}  (fixes of {why})")
+    if result.blast:
+        typer.echo("  usually changes with them (blast radius):")
+    for t in result.blast:
+        typer.echo(f"  {t.score:>6.2f}  {t.component}")
+
+
 @app.command()
 def chunks(full: bool = False) -> None:
     """Parse and chunk the raw dir; print one line per chunk (or full text)."""
@@ -752,4 +1001,7 @@ def mcp() -> None:
         conn.autocommit = True
         target = get_settings().target_repo
         run = _triage_fn(conn, refresh=True)
-        build_mcp(embed, conn, driver, run, default_repo=target).run("stdio")
+        impact_run = _impact_fn(conn, driver, embed)
+        build_mcp(
+            embed, conn, driver, run, default_repo=target, impact_fn=impact_run
+        ).run("stdio")

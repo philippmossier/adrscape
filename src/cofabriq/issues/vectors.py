@@ -1,7 +1,7 @@
 """Issue vectors in pgvector: one row per issue, nearest earlier issues."""
 
 import hashlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -94,9 +94,15 @@ def sync(conn: Conn, issues: Iterable[Issue], embed: Embed) -> IssueSyncReport:
 
 
 def nearest(
-    conn: Conn, repo: str, number: int, k: int, before: datetime
+    conn: Conn,
+    repo: str,
+    number: int,
+    k: int,
+    before: datetime,
+    among: Sequence[int] | None = None,
 ) -> list[Neighbour]:
-    """The k stored issues closest to issue `number`, created before `before`.
+    """The k stored issues closest to issue `number`, created before `before`,
+    optionally only among the issue numbers `among`.
 
     The time cut makes an eval honest: a duplicate can only point at an issue
     that existed when it was filed.
@@ -107,8 +113,39 @@ def nearest(
         " SELECT i.number, 1 - (i.embedding <=> q.embedding) FROM issues i, q"
         " WHERE i.repo = %(repo)s AND i.number <> %(n)s"
         "   AND i.created_at < %(before)s"
+        "   AND (%(among)s::int[] IS NULL OR i.number = ANY(%(among)s::int[]))"
         " ORDER BY i.embedding <=> q.embedding LIMIT %(k)s",
-        {"repo": repo, "n": number, "before": before, "k": k},
+        {
+            "repo": repo,
+            "n": number,
+            "before": before,
+            "k": k,
+            "among": list(among) if among is not None else None,
+        },
+    ).fetchall()
+    return [Neighbour(number=r[0], score=float(r[1])) for r in rows]
+
+
+def nearest_to(
+    conn: Conn,
+    repo: str,
+    vector: list[float],
+    k: int,
+    among: Sequence[int] | None = None,
+) -> list[Neighbour]:
+    """The k stored issues closest to a vector (a plan, not an issue),
+    optionally only among the issue numbers `among`."""
+    rows = conn.execute(
+        "SELECT number, 1 - (embedding <=> %(v)s) FROM issues"
+        " WHERE repo = %(repo)s"
+        "   AND (%(among)s::int[] IS NULL OR number = ANY(%(among)s::int[]))"
+        " ORDER BY embedding <=> %(v)s LIMIT %(k)s",
+        {
+            "repo": repo,
+            "v": Vector(vector),
+            "k": k,
+            "among": list(among) if among is not None else None,
+        },
     ).fetchall()
     return [Neighbour(number=r[0], score=float(r[1])) for r in rows]
 

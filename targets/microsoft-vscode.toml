@@ -38,3 +38,30 @@ template = "Does this issue occur when all extensions are disabled"
 needs_info_label = "info-needed"
 bug_label = "bug"
 sample = 200
+
+# Repo map (0.2): path patterns, first match wins; the last segment of a
+# pattern names the component (`contrib/*` -> `.../contrib/terminal`).
+# Everything else falls back to its top-level folder (build, test, cli).
+[map]
+patterns = [
+  "src/vs/workbench/contrib/*",
+  "src/vs/workbench/services/*",
+  "src/vs/workbench/api",
+  "src/vs/workbench/*",
+  "src/vs/editor/contrib/*",
+  "src/vs/editor/*",
+  "src/vs/platform/*",
+  "src/vs/base/*",
+  "src/vs/*",
+  "extensions/*",
+]
+
+# Impact eval (0.2), fixed before scoring: issues closed as completed by a
+# PR or a commit, whose fix commits ("fixes #N") touch 1 to 50 files; the
+# truth is the components those commits touched. Map cut before the dev
+# window, so co-change never contains a fix being predicted.
+[impact]
+map_until = 2022-12-31
+window = ["2023-01-01", "2023-12-31"]
+test_window = ["2024-01-01", "2024-12-31"]
+sample = 300

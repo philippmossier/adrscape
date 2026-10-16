@@ -11,3 +11,14 @@ chat = "Conversations: sending and streaming messages, the composer, message ren
 privacy = "The network request counter and privacy panel, the Content-Security-Policy, delete everything, the compliance page (src/lib/privacy, docs/for-it-and-compliance.md)."
 ui = "Layout, theme, German and English texts, language detection, accessibility, shadcn components (src/components/ui, lang, labels, theme)."
 build-deploy = "Vite build, the copied WebAssembly runtime, response headers, Cloudflare deploy, CI and dependencies (vite.config.ts, scripts, wrangler, .github)."
+
+# Repo map (0.2): the same components as file globs, checked in order; files
+# that match none fall back to their top-level folder.
+[map.named]
+hardware-check = ["src/lib/hardware/**", "src/components/advice-banner.tsx"]
+models = ["src/lib/models/**", "src/components/model-picker.tsx", "src/components/loading.tsx"]
+inference = ["src/lib/engine/**"]
+chat = ["src/lib/chat/**", "src/components/chat*.tsx", "src/components/message.tsx", "src/components/welcome.tsx"]
+privacy = ["src/lib/privacy/**", "src/components/privacy-panel.tsx", "docs/for-it-and-compliance.md"]
+ui = ["src/components/ui/**", "src/components/app-header.tsx", "src/components/sidebar-chrome.tsx", "src/components/theme-menu.tsx", "src/hooks/**", "src/lib/lang*.ts", "src/lib/labels.ts", "src/lib/theme.ts", "src/styles.css"]
+build-deploy = ["vite.config.ts", "vitest.config.ts", "wrangler.jsonc", "scripts/**", ".github/**", "package.json", "package-lock.json", "tsconfig*.json"]
