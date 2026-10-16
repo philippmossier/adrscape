@@ -1167,6 +1167,12 @@ def _publish(
     return published.model_dump(mode="json")
 
 
+def _indented(out: Console, text: Text) -> None:
+    """Agent text under a trace line, wrapped: on a `soft_wrap` console
+    `Padding` would crop it at the terminal width."""
+    out.print(Padding(text, (0, 0, 0, 9)), soft_wrap=False)
+
+
 def _show_gate(gated: gate_mod.Gated) -> None:
     """Per review round: blockers proven or not, the fix against them."""
     out = Console(highlight=False, soft_wrap=True)
@@ -1176,10 +1182,10 @@ def _show_gate(gated: gate_mod.Gated) -> None:
         for p in r.proofs:
             state = f"proven by {', '.join(p.tests)}" if p.proven else "unproven"
             where = gate_mod.finding_text(p.finding)
-            out.print(Padding(Text(f"{state}: {where}"), (0, 0, 0, 9)))
+            _indented(out, Text(f"{state}: {where}"))
         if r.attempts:
             ok = "green" if r.attempts[-1].green else "still red"
-            out.print(Padding(Text(f"fix: {ok} after {len(r.attempts)}"), (0, 0, 0, 9)))
+            _indented(out, Text(f"fix: {ok} after {len(r.attempts)}"))
     if gated.error:
         out.print(Text(f"review failed: {gated.error}", style="yellow"))
     blocked = gated.status == "blocked"
@@ -1201,15 +1207,15 @@ def _show_draft(draft: pr_mod.Draft) -> None:
     verdict = "approved" if review.approved else "CHANGES REQUESTED"
     cost = f"${run.cost_usd:.3f} {run.turns} turns {run.latency_ms / 1000:.0f} s"
     out.print(Text(f"review   {verdict} ({cost})"))
-    out.print(Padding(Text(r.summary), (0, 0, 0, 9)))
+    _indented(out, Text(r.summary))
     for f in r.findings:
         where = f.path if f.line is None else f"{f.path}:{f.line}"
-        out.print(Padding(Text(f"{f.severity} {where}: {f.text}"), (0, 0, 0, 9)))
+        _indented(out, Text(f"{f.severity} {where}: {f.text}"))
 
 
 def _show_loop(judged: loop_eval.Judged) -> None:
-    """The trace per node, then the verdicts and the diff. Agent text goes
-    in as `Text`."""
+    """The diff, then the trace per node and the verdicts: the verdicts end
+    the output, where the eye lands. Agent text goes in as `Text`."""
     result = judged.result
     out = Console(highlight=False, soft_wrap=True)
 
@@ -1230,8 +1236,10 @@ def _show_loop(judged: loop_eval.Judged) -> None:
                 reverted = ", ".join(a.reverted)
                 out.print(Text(f"         reverted: {reverted}", style="yellow"))
             if a.summary:
-                out.print(Padding(Text(a.summary), (0, 0, 0, 9)))
+                _indented(out, Text(a.summary))
 
+    if result.diff:
+        out.print(Text(result.diff))
     out.print(Text(f"setup    {result.setup_s:.0f} s (worktree, install)"))
     attempts("repro", result.reproduce)
     if result.red is not None:
@@ -1248,8 +1256,6 @@ def _show_loop(judged: loop_eval.Judged) -> None:
         if check is not None:
             verdict = "green" if check.ok else "RED"
             out.print(Text(f"{name}    {verdict} ({meaning})"))
-    if result.diff:
-        out.print(Text(result.diff))
 
 
 @eval_app.command("refine")

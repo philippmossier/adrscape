@@ -5,259 +5,158 @@ An agentic software factory that devs use as a tool, not a review queue for them
 Small, low-risk issues go through **autopilot**: triaged, implemented, gated
 by the repository's own CI, reviewed and handed to the dev as a draft PR.
 Real features stay with the dev, who plans them in **planning mode** on a map
-of the repository. Today, in 0.1: issue in, triage card out.
+of the repository. Today, in 0.2: one command takes a bug report to a
+draft PR, tried on a demo app with bugs planted on purpose.
 
-![cofabriq triage on two playground issues: a likely duplicate proven by a quote, routed to the dev with a reply draft for the missing version, then an issue with an injected instruction that the card ignores, routed ready](docs/demo/triage.gif)
+What happens to one real bug report. A user filed
+[#54](https://github.com/philippmossier/local-ai-chat-playground/issues/54):
+
+> I wrote something at 11:50 PM and checked again at 12:10 AM. The message
+> says "Today 11:50 PM". It was yesterday.
+
+The dev runs `cofabriq run 54`:
+
+1. **An agent reads the code and explains the bug.** The app counts 24-hour
+   periods since the message, not calendar days: 20 minutes after midnight
+   is less than a day, so it says "Today". Its plan: compare the two dates'
+   midnights instead.
+2. **The dev approves the plan.** No code is written before that.
+3. **An agent writes a test that fails on the bug:** a message from 23:50,
+   seen at 00:10, must say "Yesterday". It fails, so the bug is real.
+4. **An agent fixes the code until that test passes.** It can't change the
+   test. The project's own checks (types, lint, all tests) run in an
+   isolated container.
+5. **A second agent reviews the fix** without the first one's reasoning. It
+   can stop the PR only by writing a test that fails on the fix.
+6. **The dev gets a draft PR** with the plan, the test and the review, and
+   decides whether to merge it. Example:
+   [#80](https://github.com/philippmossier/local-ai-chat-playground/pull/80).
+
+About 2 minutes and $0.35 for this bug.
+
+> <details><summary><b>Show the real output of each step</b> (the same run, shortened)</summary>
+>
+> **1. The agent's spec**, shown to the dev:
+>
+> ```text
+> problem
+>   `messageTime` in src/lib/chat/time.ts:10 computes `days = Math.floor((now - at) / DAY)`.
+>   That number is the elapsed time divided by 24 h. A message sent at 23:50 and viewed
+>   at 00:10 the next day is 20 minutes old, so `days = 0` [...]
+> plan
+>   1. In src/lib/chat/time.ts, add a helper that returns local midnight for a timestamp.
+>   2. Replace line 10 with days = Math.round((startOfDay(now) - startOfDay(at)) / DAY).
+>   [...]
+> open questions
+>   Did the reporter reload the page, or was the tab left open across midnight? [...]
+> ```
+>
+> **2. The plan gate:**
+>
+> ```text
+> Approve the plan and let the agent edit? [y/N]: y
+> ```
+>
+> **3. The agent's test**, and how it fails on the current code:
+>
+> ```ts
+> it("a message just before midnight is yesterday", () => {
+>   expect(messageTime(at(9, 4, 23, 50), earlyMonday, "en")).toMatch(/^Yesterday 11:50\sPM$/);
+> });
+> ```
+>
+> ```text
+> AssertionError: expected 'Today 11:50 PM' to match /^Yesterday 11:50\sPM$/
+> Tests  4 failed | 5 passed (9)
+> ```
+>
+> **4. The fix**, then the project's checks, run in a container:
+>
+> ```diff
+> -  const days = Math.floor((now - at) / DAY);
+> +  // Calendar days in local time; Math.round absorbs 23 h / 25 h DST days.
+> +  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY);
+> ```
+>
+> ```text
+> fix 1  agent $0.047 5 turns 10 s | repro:ok(1s) types:ok(5s) lint:ok(4s) test:ok(2s)
+> ```
+>
+> **5. The review:**
+>
+> ```text
+> review   approved ($0.053 4 turns 10 s)
+>          Approve: the change counts local calendar days for both the Today/Yesterday
+>          and weekday cutoffs, as the spec asks [...]
+>          nit src/lib/chat/time.test.ts:31: Plan step 4 mentions DST-independent tests,
+>          but no case crosses a DST change. [...]
+> ```
+>
+> **6. The top of the draft PR body:**
+>
+> ```markdown
+> Fixes #54.
+>
+> - **Risk: low** (chat)
+> - **Review: approved.** Approve: the change counts local calendar days [...]
+> - **Checks:** the test was red before the change; repro, types, lint, test green after
+>
+> ### Plan (approved before any code)
+> ```
+>
+> </details>
 
 ## Why it is built this way
 
-Most "AI software factory" pipelines turn issues into pull requests and leave
-humans reviewing all day. cofabriq keeps the dev in charge: autopilot only
-takes issues that are small and low in blast radius (a type change, a typo, a
-dependency bump), and everything else is planned by the dev with the map
-answering what a change touches, which decisions constrain it and what
-related work already exists.
-
-- **A number per stage.** Every retrieval or agent change is measured on a real
-  issue history ([microsoft/vscode](https://github.com/microsoft/vscode) and
-  [open-webui](https://github.com/open-webui/open-webui), frozen snapshots).
-  The numbers live in this README.
-- **Safe by default on public repos.** Read-only until 0.3. After that, writes
-  happen only on a local trigger by the dev, as a dry run unless `--apply` is
-  passed. They are limited to one branch and a draft PR by a scoped token, not
-  by a prompt. Issue text is untrusted input.
-- **Devs own it.** One issue, one dev who triggers it, one branch, one PR that
-  same dev reviews.
-
-## Status
-
-**0.1: issue in, triage card out (read-only).** Point it at a GitHub
-repository and an issue number, get a triage card: type, severity, component,
-a one-line summary, repro steps, questions for the reporter, a duplicate
-verdict with a quoted sentence as evidence, related issues and related docs,
-and a route (0.1.3): `ready`, `needs_info` (with a reply draft for the
-reporter) or `dev` (a person decides first), with the reasons.
-
-The first card from the GIF, as text:
-
-```text
-$ uv run cofabriq triage 11 --repo philippmossier/local-ai-chat-playground
-✓ GitHub     #11 unchanged since the last fetch
-✓ embedding  up to date
-✓ search     10 earlier issues, 5 docs
-✓ LLM        card fields + duplicate verdict, 2 calls, 3.3 s
-✓ checks     component on the list, quote found in #1, 1 info missing
-
-philippmossier/local-ai-chat-playground#11 (open)
-  https://github.com/philippmossier/local-ai-chat-playground/issues/11
-  Refreshing the tab during a model download restarts the download from the beginning.
-  type          bug
-  severity      medium
-  component     models
-  repro         1. Refresh the tab while the model is downloading.
-  missing       version
-  questions     Which model were you downloading?
-                What app version or commit were you using?
-  duplicate     duplicate_of #1
-                "After the reload the progress bar started again at 0% and it downloaded everything again."
-  route         dev
-                possible duplicate of #1: confirm first
-                missing version: the version of the app, library or tool the problem occurs in
-  reply draft   Thanks for the report! To look into it, we need:
-
-                - the version you are on
-                - Which model were you downloading?
-                - What app version or commit were you using?
-  related issues (similarity)
-                0.65  #1
-                0.44  #5
-                0.43  #7
-                0.41  #4
-                0.34  #2
-  related docs (similarity)
-                0.41  docs/REVIEW-GUIDE.md#Review guide > Known weak spots (where to look for bugs)
-                0.40  docs/adr/0005-local-storage-for-chats-cache-storage-for-models.md#5. Chats in localStorage, ...
-  run           $0.0004, 3.3 s, gpt-6-luna
-```
-
-How a card is made: if the issue is new or changed on GitHub, it is fetched
-and embedded first. Its vector finds the nearest earlier issues and docs in
-pgvector. Two LLM calls run in parallel, one for the card fields and
-one for the duplicate verdict over the top 10 candidates. Plain code then
-checks what the model returned: the component must be on the repository's
-list (`targets/<owner>-<name>.toml`), severity is kept only on bugs, the
-duplicate target must be one of the candidates and its quote must occur
-verbatim in that issue. Anything that fails a check is dropped, not
-repaired. So an injected instruction in an issue can at worst produce a
-misleading summary, never a wrong component, an invented duplicate or a
-write to GitHub. Where the two calls contradict each other (typed
-`feature`, but a duplicate of a bug), the card lists the conflict and keeps
-both reads: which one is wrong is unknown.
-
-The route is plain code over the checked card. `dev` when a person has to
-decide first (a possible duplicate, a feature request, a question, a
-conflict, critical severity, no component). Otherwise `needs_info` when the
-reporter has to add something: a required item of a bug report (steps,
-what happened, version, environment) has no quote that occurs verbatim in
-the issue, or the model marks one of its questions as blocking. Otherwise
-`ready`: complete and unambiguous, not yet small (size and blast radius
-need the 0.2 map). The reply draft is printed, never posted. The same card
-is served as the `triage` MCP tool.
+- **The dev stays in charge.** Autopilot only takes small, low-risk issues;
+  the dev approves every plan before code exists and every PR before it is
+  merged. One issue, one dev, one branch, one draft PR.
+- **A claim isn't evidence, a failing test is.** In a timed review of 10
+  draft PRs, 3 of them wrong, the AI reviewer had flagged all 3 and I still
+  merged 2: after a few green PRs a prose warning stops registering. So a
+  reviewer can only block a PR with a test that fails on it
+  ([ADR-008](docs/adr/008-only-a-red-test-blocks.md)).
+- **Safe on public repos.** Issue text is untrusted input. Code the agent
+  writes runs only in a container without network
+  ([ADR-007](docs/adr/007-agent-written-code-runs-only-in-a-sandbox.md)).
+  The only write to GitHub is one branch and a draft PR, on an explicit
+  `--apply`, with a scoped token.
+- **A number per stage.** Every agent or retrieval change is measured
+  ([evals](docs/evals.md)).
 
 ## Numbers
 
-Duplicate detection is measured on two real issue histories. Each query only
-sees issues filed before it, and only comments written before it.
+On the 10 planted logic bugs of the demo app:
 
-**microsoft/vscode, provable labels (0.1.2).** 62,467 issues (created
-2022-2024, snapshot frozen 2026-10-15); queries are 2023-2024. A duplicate
-counts only if a maintainer set vscode's `*duplicate` label and a human
-comment names the target (`/duplicate #N`). A non-duplicate counts only if
-it was closed as completed by a merged PR or a commit. 2025 on is left out:
-maintainer accounts there post LLM-written triage comments, and labels
-suggested by an LLM would make an LLM eval circular. The rules are in
-[`targets/microsoft-vscode.toml`](targets/microsoft-vscode.toml), written
-before scoring; 200 pairs and 200 non-duplicates sampled with a fixed seed.
+| | |
+| --- | --- |
+| fixed, with the agent's own failing test first | 10/10, all on the first try |
+| right fixes let through by the review gate | 10/10 |
+| wrong fixes caught by the review gate and repaired before the PR | 8/8 |
+| cost per bug, end to end | about $0.35 |
 
-| Dedupe, vscode (n = 400), verdict 0.1.1      | Embedding threshold | LLM verdict      |
-| -------------------------------------------- | ------------------- | ---------------- |
-| `duplicate_of` precision                     | 0.212               | 0.346            |
-| `duplicate_of` recall                        | 0.145               | 0.235            |
-| precision / recall, any issue of the cluster | 0.372 / 0.255       | 0.515 / 0.350    |
-| `unsure` (abstained), of which right         | -                   | 88, 11 (cluster) |
-| cost / median latency per issue              | embedding only      | $0.00073 / 1.9 s |
+The wrong fixes were written wrong on purpose (an agent told to make a
+plausible but wrong fix), since the loop itself made none. Early and easy: one-file bugs in a small repo, one model in every role.
+Next: UI bugs and real issues. Details and caveats: [docs/evals.md](docs/evals.md).
 
-What it says: about half of the `duplicate_of` calls are right, so the
-verdict is a suggestion for the dev, never an action. Of the 136 calls, 32
-hit a provable non-duplicate, and only 1 of those shares a fix with its
-target. Most are a narrow follow-up called a duplicate of the broader
-feature issue ("Fine tune `clear` alert" vs "Alert screen reader users that
-something has occurred"). Retrieval caps the rest: in a 62k pool the target
-is in the top 10 for 40% of duplicates (56% counting its cluster).
+## Triage (0.1)
 
-Known gaps of the set: 21% of otherwise usable pairs name a target from
-before 2022 and are dropped, so long-lived issues are under-represented.
-Non-duplicates closed by a PR lean towards team-filed work items, which are
-harder than typical user reports.
+Before any of that, an issue gets a triage card: type, component, a
+duplicate verdict with a quote as evidence, missing info with a reply
+draft for the reporter. Measured on real issues of
+[microsoft/vscode](https://github.com/microsoft/vscode) and
+[open-webui](https://github.com/open-webui/open-webui).
 
-Tried and dropped: hybrid retrieval (Postgres full-text search on the
-query's rarest words, fused with the vector list by reciprocal rank). Top-10
-recall moved within noise on vscode (0.40 to 0.42), dropped on open-webui
-(0.568 to 0.561), and top-1 got worse on both.
+<img src="docs/demo/triage.gif" width="820" alt="cofabriq triage on two playground issues: a likely duplicate proven by a quote, routed to the dev with a reply draft for the missing version, then an issue with an injected instruction that the card ignores, routed ready">
 
-**open-webui, maintainer marks (0.1.0, 0.1.1).**
-[open-webui](https://github.com/open-webui/open-webui), 10,302 issues,
-snapshot frozen 2026-10-13: 155 duplicate pairs from GitHub's duplicate
-marks and human "duplicate of #N" comments, plus 155 issues nobody marked.
-
-| Dedupe, open-webui (n = 310)                 | Embedding threshold | LLM verdict 0.1.0 | LLM verdict 0.1.1 |
-| -------------------------------------------- | ------------------- | ----------------- | ----------------- |
-| `duplicate_of` precision                     | 0.250               | 0.346             | 0.434             |
-| `duplicate_of` recall                        | 0.310               | 0.342             | 0.342             |
-| precision / recall, any issue of the cluster | 0.292 / 0.361       | 0.399 / 0.394     | 0.484 / 0.381     |
-| `unsure` (abstained), of which right         | -                   | -                 | 62, 4             |
-| cost / median latency per issue              | embedding only      | $0.00066 / 2.2 s  | $0.00069 / 3.6 s  |
-
-0.1.1 lets the verdict abstain (`unsure`: likely the same problem, but the
-text can't confirm it) and asks for the same cause, not just the same
-symptom. Both changed in one prompt version, so the gain isn't attributable
-to abstention alone.
-
-Retrieval: the original is in the vector top 5 for 49.7% of duplicates
-(57.4% counting another duplicate of the same issue). The verdict can only
-pick from the top 10, so retrieval caps it.
-
-What the numbers say: the precision above is a lower bound, and the labels
-are the bigger problem. A non-duplicate here only means "nobody marked it":
-only 4 of the 155 were closed by a linked PR, so almost none is proven. A
-hand check of the 63 claims the labels call wrong found 40 real duplicates
-the maintainers never marked (or marked against another issue of the same
-problem), 13 real errors and 10 unclear. The real errors are same-symptom,
-different-cause calls (the same pip error on two Python versions, a
-regression matched to the original feature request). That hand check was
-an LLM's judgement plus a spot check, and the vscode set above corrected
-it: on provable labels, the precision is about 0.5, not 0.8.
-
-**Missing info, microsoft/vscode (0.1.3).** Does the card ask for more
-exactly when a maintainer did? Positive: the maintainers labelled the
-report `info-needed`. Negative: a `bug` fixed by a merged PR or a commit
-that never carried that label (label history checked on GitHub). Both sides
-filed through vscode's issue template (user reports, not team notes) with
-an unedited body. 200 + 200 per split; the method was chosen on 2023-2024
-and scored once on a held-out 2022 split.
-
-| Needs info, vscode, held-out 2022 (n = 400) | Flagged | Precision | Recall |
-| ------------------------------------------- | ------- | --------- | ------ |
-| the model asks any question (0.1.2 card)    | 217     | 0.733     | 0.795  |
-| required items without a verified quote     | 61      | 0.787     | 0.240  |
-| questions the model marks blocking          | 70      | 0.871     | 0.305  |
-| **route `needs_info` (either of the two)**  | 94      | 0.787     | 0.370  |
-
-What it says: when the card routes to `needs_info`, a maintainer asked too
-in about 4 of 5 cases, but it catches only about a third of the reports
-maintainers asked about. Most maintainer asks are issue-specific ("a gif
-would help", "does it happen on Insiders", "share a repo I can test
-with"), which no checklist knows; the model's questions catch most of them
-but also fire on 41% of bugs that were fixed as written, so they stay on
-the card as questions, not as a route. On the dev split, blocking
-precision was 0.868: the judgement held on unseen data. $0.0003 and 3.5 s
-per issue.
-
-Triage card, on the [playground](https://github.com/philippmossier/local-ai-chat-playground)
-(24 seeded issues with 4 duplicate pairs and 4 injection attempts), three
-runs of 0.1.1 (one run of 0.1.3: 24/24, 24/24, 4/4, 0/4): type 22 to 24/24, component 23 to 24/24, duplicates 3 to
-4/4 (the miss is an `unsure` on the right issue) with no false
-`duplicate_of`, injections followed 0/4, $0.0003 and 3.8 s median per
-issue. When the card's type and the verdict disagree (typed `feature`, but
-a duplicate of a bug), the card lists a conflict instead of picking a
-winner: 1 conflict in 3 runs, on a wrongly typed card. This is a
-sanity check, not a benchmark: the issues and their expected labels were
-written together. Type accuracy on messy real issues is still open.
-
-Reproduce: `cofabriq eval readiness --repo microsoft/vscode [--test]`,
-`cofabriq eval dedupe --repo <repo> [--verdict]` (the sets are
-committed in `evals/`; vscode needs `fetch-issues --repo microsoft/vscode
---created 2022-01-01..2024-12-31` first, about an hour) and
-`cofabriq eval triage --repo philippmossier/local-ai-chat-playground`.
-
-### Underneath: the context layer
-
-Ingests a repository's docs and manifests from local clones, embeds them
-into pgvector for semantic search (the "related docs" on a card), extracts
-entities with an LLM into a Neo4j graph and serves search and graph queries
-as MCP tools. The 0.2 repo map grows out of it.
-
-## How it fits together (target)
-
-```mermaid
-graph LR
-    ISSUE(["GitHub issue"]) --> TRIAGE["Triage<br/>dedupe, type, component,<br/>repro, missing info"]
-    TRIAGE --> CARD["Triage card"]
-    MAP[("Repo map<br/>files, components, PRs,<br/>issues, decisions")]
-    CARD --> PLAN["Planning mode<br/>impact of a plan"]
-    CARD --> AUTO["Autopilot<br/>small + low blast radius only"]
-    MAP --> PLAN
-    MAP --> AUTO
-    AUTO --> IMPL["Implement<br/>(delegated coding agent)"]
-    IMPL --> CI["Target repo's CI"]
-    CI -- "fail: fix, max 3, then escalate" --> IMPL
-    CI --> REVIEW["Reviewer<br/>own context, decisions in force"]
-    REVIEW --> PR(["Draft PR for the dev"])
-    DEV(["Dev"]) --> PLAN
-    DEV -- "triggers" --> AUTO
-```
-
-What cofabriq builds: triage, the repo map, the implement-and-fix loop, the
-reviewer and blast-radius routing. What it consumes: the target repository's CI,
-and a coding agent for implementation. What it does not read itself: source
-code. The map gets its structure from file paths, manifests and git history;
-the coding agent reads the code when it plans and implements a change.
+How each part works: [docs/how-it-works.md](docs/how-it-works.md).
 
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/), Podman (or Docker) with compose,
 an OpenAI key and a fine-grained GitHub token with "Public repositories
-(read-only)" and no other permission. cofabriq never writes to GitHub.
+(read-only)" and no other permission. Without `run --apply`, cofabriq
+never writes to GitHub.
 
 ```bash
 make setup               # install deps, create .env (set OPENAI_API_KEY, GITHUB_TOKEN)
@@ -265,8 +164,8 @@ make up                  # Postgres + pgvector (5433), Neo4j (7474, 7687), test 
 uv run cofabriq health   # OK per service
 ```
 
-Triage an issue on the playground (a copy of a small local-first chat app
-with seeded issues; it resets regularly, so numbers may shift):
+Triage an issue on the playground (a small local-first chat app with
+seeded issues):
 
 ```bash
 REPO=philippmossier/local-ai-chat-playground
@@ -277,54 +176,30 @@ uv run cofabriq fetch ../local-ai-chat-playground && uv run cofabriq embed   # d
 uv run cofabriq triage 11 --repo $REPO       # add --json for the raw card
 ```
 
-The `fetch` and `embed` commands are a one-time sync (rerun them to pick up
-new issues). After that, `triage <n>` is the only command: an issue filed a minute ago is
-fetched and embedded on the spot.
+Run the loop on a playground issue (needs an Anthropic key, the
+[`claude`](https://docs.anthropic.com/en/docs/claude-code) CLI on the PATH
+and Podman; about $0.35 per issue):
 
-Any other public repository works the same way. Add a
-`targets/<owner>-<name>.toml` with its components first: the card picks
-its component from that list. `uv run cofabriq mcp` serves the same card
-to Claude Code (registered in `.mcp.json`).
+```bash
+uv run cofabriq refine 54 --repo $REPO     # the spec only: read-only agent, prints it
+uv run cofabriq run 54 --repo $REPO        # refine, plan gate, repro, fix, review gate, PR body (dry run)
+```
+
+`--apply` opens the draft PR on GitHub (needs `GITHUB_WRITE_TOKEN`,
+playground only).
 
 Development: `make check` runs ruff, pyright (strict) and pytest.
 
 ## Roadmap
 
-- [x] **Foundation (untagged):** context layer over a
-      repository's docs: fetch, parse, chunk, embed, semantic search, LLM
-      extraction, graph, MCP tools
-- [x] **0.1: issue in, triage card out (read-only).** GitHub issues as a
-      source, two-stage dedupe (vector candidates, LLM verdict with checked
-      evidence), triage card, `triage` CLI and MCP tool. Numbers: recall@5,
-      verdict precision and recall against an embedding baseline, cost and
-      latency per issue
-- [x] **0.1.1:** the verdict may abstain (`unsure`), card-verdict conflicts
-      are flagged
-- [x] **0.1.2:** a dedupe eval set with provable labels on both sides
-      (microsoft/vscode: duplicates named by a maintainer action,
-      non-duplicates closed by a merged PR or commit)
-- [x] **0.1.3:** readiness route (`ready`, `needs_info`, `dev`) with
-      verified required info, a blocking judgement and a reply draft;
-      missing-info eval on vscode's `info-needed` label, held-out split
-- [ ] **0.2: the core loop, on a playground with planted bugs.** Refine
-      (an agent reads the code and writes a spec; the dev approves it before
-      any code exists), reproduce (a failing test first, or it goes back to
-      a human), implement in a worktree, the target's own checks, a capped
-      fix loop, a reviewer with its own context, risk tiers on the diff, a
-      draft PR the dev merges. Numbers: resolve rate, cost and human minutes
-      per merged PR.
-      Done so far: a repo map from git history (components, co-change,
-      fixes) and `impact`: from the issue text alone, a component the fix
-      touched is in the top 5 for 75% of vscode issues on a held-out year
-      (popularity baseline 22%), no LLM call. Kept as an MCP tool, not as
-      the way the factory finds code: the agent reads the code
-- [ ] **Later:** lookback (recurring fixes mark brittle areas), visual plan
-      review, learning from run traces, more target repos
+- [x] **0.1** triage: duplicates, missing info, a route per issue
+- [x] **0.2** the core loop: plan, failing test, fix, review gate, draft PR
+- [ ] **Next:** harder bugs (UI, real issues of a real repo), a different
+      reviewer model, triage feeding the loop
+- [ ] **Later:** planning mode for features, more target repos
 
-Milestones are 0.x releases, tagged in git: the API and the CLI may still
-change. 1.0 comes when someone besides me relies on it.
-
-Decisions are recorded in `docs/adr/` as they are made.
+0.x releases: the CLI may still change. Decisions are recorded in
+[`docs/adr/`](docs/adr/) as they are made.
 
 ## How this is built
 

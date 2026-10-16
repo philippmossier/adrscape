@@ -9,9 +9,9 @@ carries over. Why: `docs/adr/006-re-scope-to-a-software-factory.md`.
 
 Roadmap: 0.1 triage (read-only) -> 0.2 the core loop on the playground
 (refine, plan gate, reproduce, implement, checks, reviewer, risk tiers, draft
-PR) -> later: lookback, more targets. Current: v0.1.3; 0.2 steps 1-7 (repo
-map, impact eval, planted bugs, refine, the loop, agent-written repro) done,
-step 8 (reviewer, draft PR) next.
+PR) -> later: lookback, more targets. Current: v0.2.0 (the core loop on
+the playground's planted bugs); next: harder truth (UI bugs, real issues),
+a different reviewer model.
 
 ## Commands
 
