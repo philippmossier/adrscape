@@ -84,7 +84,7 @@ def write(
 ) -> MapReport:
     for constraint in CONSTRAINTS:
         driver.execute_query(constraint)
-    _delete(driver, repo)
+    _delete(driver, repo)  # a rebuild replaces the repo's map whole
     files_per = Counter(m.files.values())
     driver.execute_query(
         "MERGE (r:Repo {name: $repo}) SET r.rev = $rev, r.until = $until",
@@ -129,6 +129,8 @@ def write(
         repo,
         [{"a": a, "b": b, "n": n} for a, b, n in m.files_together],
     )
+    # one Fix node per commit, then (per row) one TOUCHED edge per component:
+    # `WITH ... UNWIND` turns the row's component list into one row each
     _batched(
         driver,
         "UNWIND $rows AS row"
@@ -249,6 +251,8 @@ def _delete(driver: Driver, repo: str) -> None:
 def _batched(
     driver: Driver, query: LiteralString, repo: str, rows: Sequence[dict[str, Any]]
 ) -> None:
+    """Run `query` once per BATCH rows; the query reads them as `$rows`
+    (`UNWIND $rows AS row` = a for-loop over the list, inside Neo4j)."""
     for chunk in _chunks(rows):
         driver.execute_query(query, repo=repo, rows=chunk)
 

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     agent_effort: str = "medium"
     clones_dir: Path = Path("data/clones")
     refine_dir: Path = Path("data/refine")
+    work_dir: Path = Path("data/work")  # worktrees of the core loop
+    runs_dir: Path = Path("data/runs")  # one JSON per `cofabriq run`
 
 
 @lru_cache

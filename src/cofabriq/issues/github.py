@@ -259,6 +259,8 @@ class GitHubIssueSource:
         out: dict[int, History] = {}
         for start in range(0, len(numbers), HISTORY_BATCH):
             batch = numbers[start : start + HISTORY_BATCH]
+            # one request for the whole batch: each issue under an alias
+            # (`i12: issue(number: 12)`), read back by its key below
             fields = "\n".join(
                 f"i{n}: issue(number: {int(n)}) {{ ...History }}" for n in batch
             )

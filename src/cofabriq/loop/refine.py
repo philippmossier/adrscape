@@ -8,6 +8,7 @@ afterwards; an unknown path is flagged for the dev, not dropped (a fix may
 add a file).
 """
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Literal
@@ -90,12 +91,20 @@ def _unfenced(text: str) -> str:
     return text.replace("</issue", "</ issue")
 
 
+def git_env() -> dict[str, str]:
+    """The environment for git on a target repo: without the caller's
+    `GIT_*` variables. Inside a git hook (cofabriq's own pre-commit runs the
+    tests) `GIT_INDEX_FILE` and friends would point git at the wrong repo."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def tracked(clone: Path, commit: str) -> set[str]:
     out = subprocess.run(
         ["git", "-C", str(clone), "ls-tree", "-r", "--name-only", commit],
         capture_output=True,
         text=True,
         check=True,
+        env=git_env(),
     )
     return set(out.stdout.splitlines())
 
@@ -106,6 +115,7 @@ def head(clone: Path) -> str:
         capture_output=True,
         text=True,
         check=True,
+        env=git_env(),
     )
     return out.stdout.strip()
 
@@ -158,4 +168,6 @@ def update_clone(repo: str, clone: Path) -> str:
 
 
 def _git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, check=True)
+    subprocess.run(
+        ["git", "-C", str(cwd), *args], capture_output=True, check=True, env=git_env()
+    )

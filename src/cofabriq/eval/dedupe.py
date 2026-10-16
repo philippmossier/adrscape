@@ -102,6 +102,9 @@ def named_targets(body: str, repo: str) -> set[int]:
     url = re.escape(f"https://github.com/{repo}/issues/")
     ref = rf"(?:#(\d+)\b|{url}(\d+)\b)"
     flags = re.IGNORECASE | re.MULTILINE
+    # refs right after the phrase ("duplicate of #12"), else all refs; the
+    # lookbehind skips `other/repo#12`. Each match is (number from `#N`,
+    # number from the URL), one of them empty.
     after = re.findall(rf"(?:{DUPLICATE.pattern})[\s:]*\[?{ref}", body, flags)
     anywhere = re.findall(rf"(?<![\w/-]){ref}", body, flags)
     return {int(a or b) for a, b in after or anywhere}
@@ -126,6 +129,8 @@ def build(
     [repo] = {i.repo for i in issues}
     by_number = {i.number: i for i in issues}
 
+    # 1. collect: every query issue -> the earlier issues it was called a
+    # duplicate of, by GitHub's mark (both directions) or a human comment
     targets: dict[int, dict[int, Signal]] = {}  # query -> target -> signal
     for issue in issues:
         for ref in issue.duplicate_of:
@@ -146,6 +151,8 @@ def build(
     clear = {q: next(iter(n.items())) for q, n in targets.items() if len(n) == 1}
     clusters = _clusters([(q, t) for q, (t, _) in clear.items()])
 
+    # 2. pairs: keep a query if it is in the window and its target exists
+    # and is older (else retrieval could never find it at query time)
     pairs: list[Pair] = []
     unusable = ambiguous = 0
     for query, (target, signal) in sorted(clear.items()):
@@ -165,6 +172,9 @@ def build(
         kept = random.Random(seed).sample(pairs, rules.sample)
         pairs = sorted(kept, key=lambda p: p.query)
 
+    # 3. negatives: issues with no duplicate signal at all, as many as
+    # pairs; `rules.negatives` says whether they must also be fixed issues
+    # (provably not duplicates) or may be any unlabelled issue
     labelled = targets.keys() | {t for named in targets.values() for t in named}
     oldest = min(i.created_at for i in issues)
     pool = sorted(

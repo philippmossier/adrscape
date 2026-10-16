@@ -45,3 +45,14 @@ def load_bugs(path: Path, seed: Path) -> list[PlantedBug]:
         if not b.repro.endswith(suffix):
             raise ValueError(f"{b.key}: a {b.kind} repro ends in {suffix}")
     return bugs
+
+
+def planted_for(title: str, bugs: list[PlantedBug], seed: Path) -> PlantedBug | None:
+    """The planted bug whose seed issue has this title (seed keys carry no
+    GitHub numbers, see `triage.match`)."""
+    keys = {s.title: s.key for s in load_seed(seed)}
+    return next((b for b in bugs if b.key == keys.get(title)), None)
+
+
+def repro_path(bugs_file: Path, bug: PlantedBug) -> Path:
+    return bugs_file.parent / "bugs" / "repro" / bug.repro

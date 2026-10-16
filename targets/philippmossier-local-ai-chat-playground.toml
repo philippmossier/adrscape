@@ -22,3 +22,19 @@ chat = ["src/lib/chat/**", "src/components/chat*.tsx", "src/components/message.t
 privacy = ["src/lib/privacy/**", "src/components/privacy-panel.tsx", "docs/for-it-and-compliance.md"]
 ui = ["src/components/ui/**", "src/components/app-header.tsx", "src/components/sidebar-chrome.tsx", "src/components/theme-menu.tsx", "src/hooks/**", "src/lib/lang*.ts", "src/lib/labels.ts", "src/lib/theme.ts", "src/styles.css"]
 build-deploy = ["vite.config.ts", "vitest.config.ts", "wrangler.jsonc", "scripts/**", ".github/**", "package.json", "package-lock.json", "tsconfig*.json"]
+
+# Core loop (0.2): how a worktree is set up and what has to pass. Commands
+# run in the container below, never on the host; only `install` has
+# network, before the agent changes anything (see src/cofabriq/loop/sandbox.py).
+[loop]
+image = "docker.io/library/node:24-slim"
+setup = "corepack enable"
+install = "pnpm install --frozen-lockfile"
+repro_dir = "src/repro"
+repro = "pnpm exec vitest run"
+protected = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "vitest.config.ts", "eslint.config.js", "playwright.config.ts"]
+checks = [
+  { name = "types", cmd = "pnpm check-types" },
+  { name = "lint", cmd = "pnpm lint" },
+  { name = "test", cmd = "pnpm test" },
+]

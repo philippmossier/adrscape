@@ -30,10 +30,11 @@ from cofabriq.context.store import graph as kg
 from cofabriq.context.store import postgres
 from cofabriq.eval import dedupe
 from cofabriq.eval import impact as impact_eval
+from cofabriq.eval import loop as loop_eval
 from cofabriq.eval import readiness as readiness_eval
 from cofabriq.eval import refine as refine_eval
 from cofabriq.eval import triage as triage_eval
-from cofabriq.eval.bugs import load_bugs
+from cofabriq.eval.bugs import PlantedBug, load_bugs, planted_for, repro_path
 from cofabriq.issues import triage as triage_mod
 from cofabriq.issues import vectors
 from cofabriq.issues import verdict as verdict_mod
@@ -41,7 +42,9 @@ from cofabriq.issues.fetch import fetch_created, fetch_issues, load_issue, load_
 from cofabriq.issues.github import GitHubIssueSource
 from cofabriq.issues.model import Issue, check_repo
 from cofabriq.loop import refine as refine_mod
+from cofabriq.loop import run as run_mod
 from cofabriq.loop.engine import AgentError, ClaudeCode
+from cofabriq.loop.sandbox import Podman
 from cofabriq.map import build as map_build_mod
 from cofabriq.map import components as components_mod
 from cofabriq.map import fixes as fixes_mod
@@ -947,6 +950,122 @@ def _render_spec(out: Console, refined: refine_mod.Refined) -> None:
     section("open questions", s.open_questions)
 
 
+@app.command()
+def run(
+    number: int,
+    repo: str = "philippmossier/local-ai-chat-playground",
+    spec: Path | None = None,
+    yes: bool = False,
+    keep: bool = False,
+    bugs: Path = Path("playground/bugs.toml"),
+    seed: Path = Path("playground/seed.toml"),
+) -> None:
+    """The core loop for one planted logic bug: refine, plan gate, repro red,
+    the agent fixes it, repro and checks in a container, max 3 attempts
+    (paid). `--spec` takes a `refine --json` file instead of a new refine
+    run (the dev may edit it); `--yes` skips the plan gate; `--keep` leaves
+    the worktree in data/work/. The result goes to data/runs/."""
+    settings = get_settings()
+    target = check_repo(repo)
+    rules = run_mod.load_rules(settings.targets_dir, target)
+    if rules is None:
+        typer.echo(f"no [loop] in the target file of {target}", err=True)
+        raise typer.Exit(code=1)
+    agent = _agent()
+    steps = Steps(Console(stderr=True, soft_wrap=True))
+    clone = settings.clones_dir / target.replace("/", "-")
+    with steps.step("clone", f"updating {clone}") as done:
+        commit = refine_mod.update_clone(target, clone)
+        done(f"{clone} at {commit[:7]}")
+    issue = _refresh_issue(target, number, steps)
+    if issue is None:
+        typer.echo(f"#{number} is not in {settings.issues_dir}", err=True)
+        raise typer.Exit(code=1)
+    bug = planted_for(issue.title, load_bugs(bugs, seed), seed)
+    if bug is None or bug.kind != "logic":
+        typer.echo(
+            f"#{number} is not a planted logic bug: no repro (the agent "
+            "writes its own repro later)",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    steps.note("repro", f"{bug.key}: {bug.repro}")
+    if spec is not None:
+        refined = refine_mod.Refined.model_validate_json(spec.read_text("utf-8"))
+        if (refined.repo, refined.number) != (target, number):
+            typer.echo(f"{spec} is for {refined.repo}#{refined.number}", err=True)
+            raise typer.Exit(code=1)
+        steps.note("spec", f"from {spec} (at {refined.commit[:7]})")
+    else:
+        with steps.step("refine", f"reading the code ({agent.model})") as done:
+            try:
+                refined = refine_mod.refine(issue, clone, agent)
+            except AgentError as exc:
+                typer.echo(str(exc), err=True)
+                raise typer.Exit(code=1) from exc
+            r = refined.run
+            done(f"{r.turns} turns, {r.latency_ms / 1000:.0f} s, ${r.cost_usd:.3f}")
+    _show_spec(refined)
+    if not yes and not typer.confirm("Approve the plan and let the agent edit?"):
+        raise typer.Exit(code=1)
+    worktree = settings.work_dir / f"{target.replace('/', '-')}-{number}"
+    with steps.step("loop", f"repro, fix, checks in {worktree}") as done:
+        try:
+            result = run_mod.run_loop(
+                repo=target,
+                number=number,
+                commit=refined.commit,
+                spec=refined.spec,
+                clone=clone,
+                worktree=worktree,
+                repro_file=repro_path(bugs, bug),
+                rules=rules,
+                agent=agent.editing(budget_usd=1.0),
+                sandbox=Podman(image=rules.image, setup=rules.setup),
+            )
+        finally:
+            if not keep:
+                run_mod.remove_worktree(clone, worktree)
+        tries = len(result.attempts)
+        done(f"{result.status}, {tries} attempts, ${result.cost_usd:.3f}")
+    _show_loop(result)
+    out = settings.runs_dir / (
+        f"{target.replace('/', '-')}-{number}-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(result.model_dump_json(indent=2), "utf-8")
+    typer.echo(f"-> {out}")
+    if result.status != "green":
+        raise typer.Exit(code=2)
+
+
+def _show_loop(result: run_mod.LoopResult) -> None:
+    """The trace per node, then the diff. Agent text goes in as `Text`."""
+    out = Console(highlight=False, soft_wrap=True)
+    out.print(Text(f"setup  {result.setup_s:.0f} s (worktree, install)"))
+    if result.red is not None:
+        state = "red" if not result.red.ok else "green before any change"
+        out.print(Text(f"repro  {state}, {result.red.seconds:.0f} s"))
+    for a in result.attempts:
+        run = a.run
+        agent = (
+            f"${run.cost_usd:.3f} {run.turns} turns {run.latency_ms / 1000:.0f} s"
+            if run is not None
+            else f"failed: {a.error}"
+        )
+        checks = " ".join(
+            f"{c.name}:{'ok' if c.ok else 'FAIL'}({c.seconds:.0f}s)" for c in a.checks
+        )
+        out.print(Text(f"try {a.n}  agent {agent} | {checks}"))
+        if a.reverted:
+            out.print(Text(f"       reverted: {', '.join(a.reverted)}", style="yellow"))
+        if a.summary:
+            out.print(Padding(Text(a.summary), (0, 0, 0, 7)))
+    out.print(Text(f"{result.status}: {', '.join(result.changed) or 'no changes'}"))
+    if result.diff:
+        out.print(Text(result.diff))
+
+
 @eval_app.command("refine")
 def eval_refine(
     repo: str = "philippmossier/local-ai-chat-playground",
@@ -1035,6 +1154,100 @@ def eval_refine(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(
         TypeAdapter(dict[str, refine_mod.Refined]).dump_json(done, indent=2)
+    )
+    typer.echo(f"  -> {out}")
+
+
+@eval_app.command("loop")
+def eval_loop(
+    repo: str = "philippmossier/local-ai-chat-playground",
+    only: str | None = None,
+    workers: int = 4,
+    bugs: Path = Path("playground/bugs.toml"),
+    seed: Path = Path("playground/seed.toml"),
+) -> None:
+    """The core loop on the planted logic bugs: resolved (repro and checks
+    green within 3 attempts), first try, fix in the reference's files, cost
+    and time, per bug size.
+
+    Paid: the implementer's runs only. Each bug starts from the spec
+    `eval refine` stored in data/refine/ (refine is measured there); a bug
+    without one, or with one made at another commit, is reported and
+    skipped. Every result goes to data/runs/.
+    """
+    settings = get_settings()
+    target = check_repo(repo)
+    rules = run_mod.load_rules(settings.targets_dir, target)
+    if rules is None:
+        typer.echo(f"no [loop] in the target file of {target}", err=True)
+        raise typer.Exit(code=1)
+    agent = _agent().editing(budget_usd=1.0)
+    planted = [b for b in load_bugs(bugs, seed) if b.kind == "logic"]
+    if only is not None:
+        keys = only.split(",")
+        unknown = set(keys) - {b.key for b in planted}
+        if unknown:
+            names = ", ".join(sorted(unknown))
+            typer.echo(f"unknown logic bug keys: {names}", err=True)
+            raise typer.Exit(code=1)
+        planted = [b for b in planted if b.key in keys]
+    clone = settings.clones_dir / target.replace("/", "-")
+    commit = refine_mod.update_clone(target, clone)
+    specs = loop_eval.load_specs(settings.refine_dir)
+    ready = [b for b in planted if b.key in specs and specs[b.key].commit == commit]
+    for b in planted:
+        if b not in ready:
+            typer.echo(f"  {b.key:<30} skipped: no stored spec at {commit[:7]}")
+    typer.echo(f"{target} at {commit[:7]}: {len(ready)} logic bugs, {agent.model}")
+    sandbox = Podman(image=rules.image, setup=rules.setup)
+
+    def run(bug: PlantedBug) -> run_mod.LoopResult:
+        refined = specs[bug.key]
+        worktree = settings.work_dir / f"eval-{bug.key}"
+        try:
+            return run_mod.run_loop(
+                repo=target,
+                number=refined.number,
+                commit=refined.commit,
+                spec=refined.spec,
+                clone=clone,
+                worktree=worktree,
+                repro_file=repro_path(bugs, bug),
+                rules=rules,
+                agent=agent,
+                sandbox=sandbox,
+            )
+        finally:
+            run_mod.remove_worktree(clone, worktree)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = dict(zip([b.key for b in ready], pool.map(run, ready), strict=True))
+    scores = [loop_eval.score_bug(b, results[b.key]) for b in ready]
+    for sc in scores:
+        target_mark = "on target" if sc.on_target else "elsewhere"
+        typer.echo(
+            f"  {sc.key:<30} {sc.size}  {sc.status:<12} {sc.attempts} tries  "
+            f"{target_mark:<9}  ${sc.cost_usd:.3f}  setup {sc.setup_s:.0f}s "
+            f"agent {sc.agent_s:.0f}s checks {sc.checks_s:.0f}s"
+        )
+    for label, group in [
+        ("all", scores),
+        *[(f"size {z}", [x for x in scores if x.size == z]) for z in ("S", "M", "L")],
+    ]:
+        t = loop_eval.summarize(group)
+        if t.n:
+            typer.echo(
+                f"  {label:<7} n={t.n:<3} resolved {t.resolved:.2f}  "
+                f"first try {t.first_try:.2f}  on target {t.on_target:.2f}  "
+                f"${t.cost_usd:.3f}/bug  {t.attempts:.0f} tries and "
+                f"{t.seconds:.0f} s median"
+            )
+    total = sum(sc.cost_usd for sc in scores)
+    typer.echo(f"  total ${total:.2f}")
+    out = settings.runs_dir / f"eval-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(
+        TypeAdapter(dict[str, run_mod.LoopResult]).dump_json(results, indent=2)
     )
     typer.echo(f"  -> {out}")
 

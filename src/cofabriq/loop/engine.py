@@ -14,19 +14,24 @@ Flags that make a run reproducible and contained:
   confined to the working directory.
 - `--strict-mcp-config`: no MCP servers.
 - `--max-budget-usd`: the run stops at the cap.
+- `--permission-mode acceptEdits`, only with a writing tool: a headless run
+  has nobody to ask. `--restricted` still keeps edits in the working
+  directory and refuses git and settings files. No tool runs code: what the
+  agent writes is only executed by cofabriq, in the sandbox (`sandbox.py`).
 """
 
 import json
 import os
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
 from pydantic import BaseModel, Field, ValidationError
 
 READ_ONLY = ("Read", "Grep", "Glob")
+EDIT = (*READ_ONLY, "Edit", "Write")
 
 
 class AgentRun(BaseModel):
@@ -59,27 +64,35 @@ class ClaudeCode:
     timeout_s: float = 600
     binary: str = "claude"
 
+    def editing(self, budget_usd: float) -> "ClaudeCode":
+        """The same agent with Edit/Write (the implementer of the loop)."""
+        return replace(self, tools=EDIT, budget_usd=budget_usd)
+
     def command(self, schema: dict[str, object], cwd: Path) -> list[str]:
+        """`claude -p` as argv; the prompt goes in on stdin (see `__call__`)."""
+        writes = bool({"Edit", "Write"} & set(self.tools))
         return [
             self.binary,
-            "-p",
-            "--bare",
-            "--restricted",
-            "--strict-mcp-config",
-            "--no-session-persistence",
-            "--tools",
+            "-p",  # headless: one prompt in, one answer out, no UI
+            "--bare",  # none of the caller's own Claude Code setup
+            "--restricted",  # no code-running tools, files confined to cwd
+            "--strict-mcp-config",  # no MCP servers
+            "--no-session-persistence",  # nothing saved for --resume
+            "--tools",  # the only tools the agent gets
             ",".join(self.tools),
-            "--add-dir",
+            "--add-dir",  # cwd: also loads the target's own CLAUDE.md
             str(cwd),
+            # only when it can write: approve edits without asking
+            *(["--permission-mode", "acceptEdits"] if writes else []),
             "--model",
             self.model,
             "--effort",
             self.effort,
-            "--max-budget-usd",
+            "--max-budget-usd",  # the run stops at this cost
             str(self.budget_usd),
-            "--output-format",
+            "--output-format",  # one JSON result: answer, cost, turns
             "json",
-            "--json-schema",
+            "--json-schema",  # the final answer must match this schema
             json.dumps(schema),
         ]
 

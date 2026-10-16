@@ -68,7 +68,8 @@ def build(
             continue
         m.used += 1
         components = sorted({m.files[f] for f in touched})
-        m.commits.update(components)
+        m.commits.update(components)  # +1 per component this commit touched
+        # +1 for every pair in this commit: files a, b, c -> (a,b) (a,c) (b,c)
         m.components_together.update(combinations(components, 2))
         pairs.update(combinations(touched, 2))
     m.files_together = _strongest(pairs)
