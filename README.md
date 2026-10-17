@@ -186,7 +186,10 @@ uv run cofabriq run 54 --repo $REPO        # refine, plan gate, repro, fix, revi
 ```
 
 `--apply` opens the draft PR on GitHub (needs `GITHUB_WRITE_TOKEN`,
-playground only).
+playground only). For your own runs, the agent can use your Claude plan
+instead of the key: `AGENT_AUTH=subscription` and a token from
+`claude setup-token` (see `.env.example`); costs shown are then API list
+prices, not billed.
 
 Development: `make check` runs ruff, pyright (strict) and pytest.
 

@@ -1,6 +1,6 @@
 [project]
 name = "cofabriq"
-version = "0.2.0"
+version = "0.2.1"
 description = "A software factory devs use as a tool: issue triage with checked LLM verdicts, a repo map for planning, autopilot for small issues."
 readme = "README.md"
 license = "MIT"

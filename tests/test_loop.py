@@ -7,7 +7,7 @@ import pytest
 from cofabriq.eval.bugs import PlantedBug, load_bugs, planted_for
 from cofabriq.eval.loop import Judged, against_key, load_specs, score_bug, summarize
 from cofabriq.eval.triage import load_seed
-from cofabriq.loop.engine import AgentRun, ClaudeCode
+from cofabriq.loop.engine import AgentRun, ApiKey, ClaudeCode
 from cofabriq.loop.run import (
     NOT_RED,
     Attempt,
@@ -222,7 +222,7 @@ def test_fence_cannot_be_closed_from_inside() -> None:
 
 
 def test_engine_accepts_edits_only_with_edit_tools() -> None:
-    reader = ClaudeCode(api_key="k")
+    reader = ClaudeCode(ApiKey("k"))
     assert "--permission-mode" not in reader.command({}, Path("/r"))
     cmd = reader.editing(budget_usd=0.5).command({}, Path("/r"))
     assert cmd[cmd.index("--permission-mode") + 1] == "acceptEdits"

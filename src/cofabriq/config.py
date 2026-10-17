@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,9 @@ class Settings(BaseSettings):
     github_write_token: SecretStr | None = None  # `run --apply` only (0.2)
     issue_comments: int = 10
     anthropic_api_key: SecretStr | None = None  # the coding agent (0.2)
+    # opt-in: the dev's own runs on their Claude plan (`claude setup-token`)
+    agent_auth: Literal["api", "subscription"] = "api"
+    claude_code_oauth_token: SecretStr | None = None
     agent_model: str = "claude-opus-5-5"
     agent_effort: str = "medium"
     clones_dir: Path = Path("data/clones")

@@ -61,7 +61,7 @@ from cofabriq.loop import pr as pr_mod
 from cofabriq.loop import publish as publish_mod
 from cofabriq.loop import refine as refine_mod
 from cofabriq.loop import run as run_mod
-from cofabriq.loop.engine import AgentError, ClaudeCode
+from cofabriq.loop.engine import AgentError, ApiKey, Auth, ClaudeCode, Subscription
 from cofabriq.loop.sandbox import Podman
 from cofabriq.map import build as map_build_mod
 from cofabriq.map import components as components_mod
@@ -868,11 +868,22 @@ def impact(
 
 def _agent() -> ClaudeCode:
     settings = get_settings()
-    if settings.anthropic_api_key is None:
+    auth: Auth
+    if settings.agent_auth == "subscription":
+        if settings.claude_code_oauth_token is None:
+            typer.echo(
+                "CLAUDE_CODE_OAUTH_TOKEN is not set (`claude setup-token`)", err=True
+            )
+            raise typer.Exit(code=1)
+        auth = Subscription(settings.claude_code_oauth_token.get_secret_value())
+        typer.echo("agent: your Claude plan; costs shown are API list prices", err=True)
+    elif settings.anthropic_api_key is None:
         typer.echo("ANTHROPIC_API_KEY is not set (see .env.example)", err=True)
         raise typer.Exit(code=1)
+    else:
+        auth = ApiKey(settings.anthropic_api_key.get_secret_value())
     return ClaudeCode(
-        api_key=settings.anthropic_api_key.get_secret_value(),
+        auth=auth,
         model=settings.agent_model,
         effort=settings.agent_effort,
     )
